@@ -27,9 +27,12 @@
         class="nav-btn"
         :class="`nav-btn--${item.id}`"
         :style="{ '--delay': `${index * 80}ms` }"
-        @click="navigate(item.id)"
+        @mousedown="onBtnMousedown($event, item.id)"
+        @mouseup="onBtnMouseup($event, item.id)"
+        @mouseleave="onBtnMouseleave(item.id)"
+        @touchstart.prevent="onBtnMousedown($event, item.id)"
+        @touchend="onBtnMouseup($event, item.id)"
         @mouseenter="hovered = item.id"
-        @mouseleave="hovered = null"
       >
         <div class="btn-bg"></div>
         <div class="btn-inner">
@@ -38,8 +41,23 @@
           <span class="btn-arrow">→</span>
         </div>
         <div class="btn-accent" :class="{ active: hovered === item.id }"></div>
+        <!-- Hold progress bar (only on playlists) -->
+        <div
+          v-if="item.id === 'playlists'"
+          class="hold-bar"
+          :style="{ transform: `scaleX(${holdProgress})` }"
+        ></div>
       </button>
     </main>
+
+    <PlaylistWheel
+      :open="wheelOpen"
+      :origin-x="wheelOriginX"
+      :origin-y="wheelOriginY"
+      :playlists="playlists"
+      @select="onWheelSelect"
+      @cancel="onWheelCancel"
+    />
 
     <footer class="footer">
       <div class="now-playing" v-if="playing">
@@ -53,6 +71,7 @@
 <script setup>
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import PlaylistWheel from '@/components/PlaylistWheel.vue'
 
 const router = useRouter()
 const hovered = ref(null)
@@ -65,6 +84,75 @@ const navItems = [
   { id: 'favorites', icon: '◇',  label: 'Lieblingssongs' },
   { id: 'chats',     icon: '⌲',  label: 'Chats' },
 ]
+
+// ── Playlist Wheel ──
+const playlists = [
+  { id: 1, name: 'Chill Vibes',       icon: '🌙', count: 24, color: '#5b6aff' },
+  { id: 2, name: 'Workout',           icon: '⚡', count: 18, color: '#ff5a32' },
+  { id: 3, name: 'Deep Focus',        icon: '◎',  count: 31, color: '#32c8a0' },
+  { id: 4, name: 'Late Night',        icon: '◈',  count: 12, color: '#c864f0' },
+  { id: 5, name: 'Road Trip',         icon: '◇',  count: 40, color: '#f0c832' },
+  { id: 6, name: 'Neue Entdeckungen', icon: '⊹',  count:  9, color: '#ff8c55' },
+]
+
+const wheelOpen    = ref(false)
+const wheelOriginX = ref(0)
+const wheelOriginY = ref(0)
+const holdProgress = ref(0)
+const selectedPlaylistId = ref(null)
+
+const HOLD_MS = 500
+let progressRAF = null
+let holdStart   = 0
+let didOpenWheel = false
+
+function onBtnMousedown(e, id) {
+  if (id !== 'playlists') return
+  didOpenWheel = false
+  holdProgress.value = 0
+  holdStart = performance.now()
+  const pos = e.touches ? e.touches[0] : e
+  wheelOriginX.value = pos.clientX
+  wheelOriginY.value = pos.clientY
+
+  function tick() {
+    const elapsed = performance.now() - holdStart
+    holdProgress.value = Math.min(elapsed / HOLD_MS, 1)
+    if (holdProgress.value < 1) {
+      progressRAF = requestAnimationFrame(tick)
+    } else {
+      didOpenWheel = true
+      wheelOpen.value = true
+      holdProgress.value = 0
+    }
+  }
+  progressRAF = requestAnimationFrame(tick)
+}
+
+function onBtnMouseup(e, id) {
+  cancelAnimationFrame(progressRAF)
+  holdProgress.value = 0
+  // only navigate on short click (no wheel opened)
+  if (id !== 'playlists' || !didOpenWheel) {
+    navigate(id)
+  }
+}
+
+function onBtnMouseleave(id) {
+  if (id !== 'playlists' || wheelOpen.value) return
+  cancelAnimationFrame(progressRAF)
+  holdProgress.value = 0
+}
+
+function onWheelSelect(id) {
+  selectedPlaylistId.value = id
+  wheelOpen.value = false
+  router.push(`/playlists?id=${id}`)
+}
+
+function onWheelCancel() {
+  wheelOpen.value = false
+}
 
 function navigate(id) {
   router.push(`/${id}`)
@@ -163,7 +251,7 @@ function navigate(id) {
 }
 .logo-text {
   font-family: 'Bebas Neue', cursive;
-  font-size: 3.4rem;
+  font-size: 2.8rem;
   letter-spacing: 0.18em;
   color: #f0ede6;
   line-height: 1;
@@ -268,6 +356,17 @@ function navigate(id) {
 }
 .btn-accent.active {
   transform: translateY(-50%) scaleY(1);
+}
+
+/* Hold progress bar */
+.hold-bar {
+  position: absolute; bottom: 0; left: 0;
+  width: 100%; height: 2px;
+  background: linear-gradient(90deg, #ff5a32, #ff8c55);
+  transform-origin: left;
+  transform: scaleX(0);
+  border-radius: 0 0 2px 2px;
+  pointer-events: none;
 }
 
 /* ── Footer ── */
