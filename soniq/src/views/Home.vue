@@ -15,7 +15,7 @@
     <header class="header">
       <div class="logo">
         <span class="logo-icon">◈</span>
-        <span class="logo-text">SONIQ</span>
+        <span class="logo-text">NyuJam</span>
       </div>
       <div class="header-sub">your universe of sound</div>
     </header>
