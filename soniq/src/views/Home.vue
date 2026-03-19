@@ -60,10 +60,14 @@
     />
 
     <footer class="footer">
-      <div class="now-playing" v-if="playing">
+      <button class="now-playing" v-if="playing" @click="router.push('/player')">
         <span class="np-dot"></span>
-        <span class="np-text">now playing — Bonobo · Kiara</span>
-      </div>
+        <div class="np-info">
+          <span class="np-label">now playing</span>
+          <span class="np-text">Bonobo · Kiara</span>
+        </div>
+        <span class="np-arrow">▶</span>
+      </button>
     </footer>
   </div>
 </template>
@@ -376,16 +380,52 @@ function navigate(id) {
   animation: fadeUp 0.6s 0.5s ease both;
 }
 .now-playing {
-  display: flex; align-items: center; gap: 0.6rem;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
-  color: rgba(240,237,230,0.3);
+  display: flex; align-items: center; gap: 0.75rem;
+  background: rgba(240,237,230,0.04);
+  border: 1px solid rgba(240,237,230,0.1);
+  border-radius: 99px;
+  padding: 0.55rem 1.1rem 0.55rem 0.85rem;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  color: #f0ede6;
+  transition: background 0.2s, border-color 0.2s, transform 0.15s;
 }
+.now-playing:hover {
+  background: rgba(255,90,50,0.08);
+  border-color: rgba(255,90,50,0.3);
+  transform: translateY(-1px);
+}
+.now-playing:active { transform: scale(0.97); }
+
 .np-dot {
-  width: 6px; height: 6px;
+  width: 7px; height: 7px; flex-shrink: 0;
   border-radius: 50%;
   background: #ff5a32;
   animation: pulse 1.6s ease infinite;
+}
+.np-info {
+  display: flex; flex-direction: column; gap: 0.05rem; text-align: left;
+}
+.np-label {
+  font-size: 0.58rem; letter-spacing: 0.15em;
+  text-transform: uppercase; color: rgba(240,237,230,0.3);
+  line-height: 1;
+}
+.np-text {
+  font-size: 0.8rem; font-weight: 500;
+  color: rgba(240,237,230,0.75);
+  letter-spacing: 0.03em;
+  line-height: 1.2;
+}
+.np-arrow {
+  font-size: 0.55rem;
+  color: rgba(240,237,230,0.25);
+  margin-left: 0.2rem;
+  transition: color 0.2s, transform 0.2s;
+}
+.now-playing:hover .np-arrow {
+  color: #ff5a32;
+  transform: translateX(2px);
 }
 
 /* ── Keyframes ── */
