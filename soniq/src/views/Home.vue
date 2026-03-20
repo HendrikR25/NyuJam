@@ -85,12 +85,12 @@ const navItems = [
   { id: 'radio',     icon: '⌇',  label: 'Radio' },
   { id: 'search',    icon: '⊹',  label: 'Suche' },
   { id: 'playlists', icon: '▤',  label: 'Playlists' },
-  { id: 'favorites', icon: '◇',  label: 'Lieblingssongs' },
   { id: 'chats',     icon: '⌲',  label: 'Chats' },
 ]
 
 // ── Playlist Wheel ──
 const playlists = [
+  { id: 0, name: 'Lieblingssongs',    icon: '♡',  count:  0, color: '#ff5a32', locked: true },
   { id: 1, name: 'Chill Vibes',       icon: '🌙', count: 24, color: '#5b6aff' },
   { id: 2, name: 'Workout',           icon: '⚡', count: 18, color: '#ff5a32' },
   { id: 3, name: 'Deep Focus',        icon: '◎',  count: 31, color: '#32c8a0' },

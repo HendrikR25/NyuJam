@@ -32,7 +32,10 @@
           <span>{{ pl.icon }}</span>
         </div>
         <div class="row-info">
-          <span class="row-name">{{ pl.name }}</span>
+          <div class="row-name-wrap">
+            <span class="row-name">{{ pl.name }}</span>
+            <span class="row-pin" v-if="pl.pinned">♥ Favoriten</span>
+          </div>
           <span class="row-meta">{{ pl.count }} Songs</span>
         </div>
         <transition name="check-pop">
@@ -103,6 +106,7 @@ const router = useRouter()
 const route  = useRoute()
 
 const playlists = [
+  { id: 0, name: 'Lieblingssongs',    icon: '♡',  count:  0, color: '#ff5a32', pinned: true },
   { id: 1, name: 'Chill Vibes',       icon: '🌙', count: 24, color: '#5b6aff' },
   { id: 2, name: 'Workout',           icon: '⚡', count: 18, color: '#ff5a32' },
   { id: 3, name: 'Deep Focus',        icon: '◎',  count: 31, color: '#32c8a0' },
@@ -278,7 +282,14 @@ function onWheelSelect(id) {
   display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
 }
 .row-info { flex: 1; display: flex; flex-direction: column; gap: 0.2rem; }
+.row-name-wrap { display: flex; align-items: center; gap: 0.5rem; }
 .row-name  { font-size: 0.95rem; font-weight: 500; color: #f0ede6; }
+.row-pin {
+  font-size: 0.58rem; letter-spacing: 0.12em; text-transform: uppercase;
+  color: #ff5a32; background: rgba(255,90,50,0.12);
+  border: 1px solid rgba(255,90,50,0.25); border-radius: 3px;
+  padding: 0.1rem 0.4rem; line-height: 1.4;
+}
 .row-meta  { font-size: 0.72rem; color: rgba(240,237,230,0.3); letter-spacing: 0.05em; }
 .row-check { color: #ff5a32; font-size: 1rem; font-weight: 600; }
 
