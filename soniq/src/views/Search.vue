@@ -58,25 +58,38 @@
 
         <!-- Ergebnis-Info -->
         <div class="results-meta">
-          Ergebnisse für <em>„{{ lastQuery }}"</em> — {{ activeTabLabel }}
+          {{ activeResults.length }} Ergebnisse für <em>„{{ lastQuery }}"</em> — {{ activeTabLabel }}
         </div>
 
-        <!-- Platzhalter-Karten -->
-        <div class="results-grid" :class="`grid--${activeTab}`">
+        <!-- Real results (songs / artists) -->
+        <div class="results-grid" v-if="activeResults.length">
           <div
-            v-for="i in placeholderCount"
-            :key="i"
+            v-for="(item, i) in activeResults"
+            :key="item.id"
             class="result-card"
             :style="{ '--i': i }"
+            @click="activeTab === 'songs' ? playSong(item) : null"
+            :class="{ clickable: activeTab === 'songs' }"
           >
             <div class="card-thumb">
-              <span class="card-thumb-icon">{{ currentTab.icon }}</span>
+              <span class="card-thumb-icon">{{ activeTab === 'songs' ? '♩' : '◉' }}</span>
             </div>
             <div class="card-info">
-              <div class="card-title skeleton"></div>
-              <div class="card-sub skeleton short"></div>
+              <div class="card-title-real">{{ item.name }}</div>
+              <div class="card-sub-real" v-if="item.artist">{{ item.artist }}</div>
             </div>
+            <span class="card-play" v-if="activeTab === 'songs'">▶</span>
           </div>
+        </div>
+
+        <!-- No results -->
+        <div class="no-results" v-else-if="activeTab === 'songs' || activeTab === 'artists'">
+          <span>Keine {{ activeTabLabel }} gefunden für „{{ lastQuery }}"</span>
+        </div>
+
+        <!-- Albums / Playlists: still prototype -->
+        <div class="no-results" v-else>
+          <span>{{ activeTabLabel }} — noch nicht verfügbar</span>
         </div>
 
       </div>
@@ -94,42 +107,85 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
-const inputRef = ref(null)
-const query = ref('')
-const lastQuery = ref('')
-const searched = ref(false)
+const player = usePlayerStore()
+
+const inputRef     = ref(null)
+const query        = ref('')
+const lastQuery    = ref('')
+const searched     = ref(false)
 const inputFocused = ref(false)
-const activeTab = ref('songs')
+const activeTab    = ref('songs')
+
+onMounted(() => {
+  if (!player.songs.length) player.loadSongs()
+})
 
 const tabs = [
-  { id: 'artists',   label: 'Künstler',  icon: '◉', count: 6 },
-  { id: 'songs',     label: 'Songs',     icon: '♩', count: 8 },
-  { id: 'albums',    label: 'Alben',     icon: '▣', count: 4 },
-  { id: 'playlists', label: 'Playlists', icon: '▤', count: 5 },
+  { id: 'songs',     label: 'Songs',     icon: '♩' },
+  { id: 'artists',   label: 'Künstler',  icon: '◉' },
+  { id: 'albums',    label: 'Alben',     icon: '▣' },
+  { id: 'playlists', label: 'Playlists', icon: '▤' },
 ]
 
-const currentTab = computed(() => tabs.find(t => t.id === activeTab.value))
+const currentTab     = computed(() => tabs.find(t => t.id === activeTab.value))
 const activeTabLabel = computed(() => currentTab.value?.label)
-const placeholderCount = computed(() => currentTab.value?.count ?? 6)
+
+// Real song results filtered from store
+const songResults = computed(() => {
+  if (!lastQuery.value) return []
+  const q = lastQuery.value.toLowerCase()
+  return player.songs.filter(s =>
+    s.name.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q)
+  )
+})
+
+// Artist results derived from songs
+const artistResults = computed(() => {
+  if (!lastQuery.value) return []
+  const q = lastQuery.value.toLowerCase()
+  const seen = new Set()
+  return player.songs
+    .filter(s => s.artist.toLowerCase().includes(q))
+    .filter(s => { if (seen.has(s.artist)) return false; seen.add(s.artist); return true })
+    .map(s => ({ id: s.id, name: s.artist }))
+})
+
+const activeResults = computed(() => {
+  if (activeTab.value === 'songs')   return songResults.value
+  if (activeTab.value === 'artists') return artistResults.value
+  return [] // albums & playlists: no real data yet
+})
+
+const placeholderCount = computed(() => {
+  if (activeTab.value === 'songs')   return songResults.value.length || 0
+  if (activeTab.value === 'artists') return artistResults.value.length || 0
+  return 0
+})
 
 function doSearch() {
   if (!query.value.trim()) return
   lastQuery.value = query.value.trim()
-  searched.value = false
-  // kurzes Reset für Re-Animation
+  searched.value  = false
   setTimeout(() => { searched.value = true }, 50)
   activeTab.value = 'songs'
 }
 
 function clearSearch() {
-  query.value = ''
+  query.value    = ''
   searched.value = false
   lastQuery.value = ''
   inputRef.value?.focus()
+}
+
+function playSong(song) {
+  player.fromRoute = '/search'
+  player.play(song)
+  router.push('/player?from=search')
 }
 </script>
 
@@ -379,6 +435,15 @@ kbd {
 }
 .card-title.skeleton { width: 55%; }
 .card-sub.skeleton.short { width: 30%; }
+
+.card-title-real { font-size: 0.88rem; font-weight: 500; color: #f0ede6; }
+.card-sub-real   { font-size: 0.7rem; color: rgba(240,237,230,0.35); margin-top: 0.15rem; }
+.result-card.clickable { cursor: pointer; }
+.result-card.clickable:hover { background: rgba(255,90,50,0.07); border-color: rgba(255,90,50,0.25); }
+.card-play { font-size: 0.7rem; color: rgba(240,237,230,0.25); flex-shrink: 0; transition: color 0.2s; }
+.result-card:hover .card-play { color: #ff5a32; }
+
+.no-results { font-size: 0.78rem; color: rgba(240,237,230,0.25); text-align: center; padding: 1.5rem 0; letter-spacing: 0.04em; }
 
 /* ── Transitions ── */
 .results-fade-enter-active { transition: opacity 0.3s ease, transform 0.3s ease; }
