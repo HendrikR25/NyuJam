@@ -279,10 +279,16 @@ onMounted(async () => {
       const info = nameById[id] ?? {}
       const contRaw = info.region ?? 'Unknown'
       const subRaw  = info.subregion ?? ''
+      const nameRaw = info.name ?? ''
       let continent = contRaw
       if (contRaw === 'Americas') {
-        continent = ['Central America','Caribbean','South America'].some(s => subRaw.includes(s))
-          ? 'South America' : 'North America'
+        // Mexico explicitly to North America
+        if (nameRaw === 'Mexico') {
+          continent = 'North America'
+        } else {
+          continent = ['Caribbean', 'South America'].some(s => subRaw.includes(s))
+            ? 'South America' : 'North America'
+        }
       }
 
       const centroid  = path.centroid(f)
@@ -291,7 +297,7 @@ onMounted(async () => {
       return {
         id:        f.id,
         iso:       id,
-        name:      info.name ?? `Country ${id}`,
+        name:      nameRaw || `Country ${id}`,
         continent,
         pathD:     path(f) ?? '',
         centroid,
