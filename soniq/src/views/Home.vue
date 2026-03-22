@@ -73,13 +73,15 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
 import { usePlayerStore } from '@/stores/player'
+import { usePlaylistsStore } from '@/stores/playlists'
 
 const router = useRouter()
 const player = usePlayerStore()
+const plStore = usePlaylistsStore()
 const hovered = ref(null)
 
 const navItems = [
@@ -91,16 +93,13 @@ const navItems = [
   { id: 'donation',  icon: '€',  label: 'Spende' },
 ]
 
-// ── Playlist Wheel ──
-const playlists = [
-  { id: 0, name: 'Lieblingssongs',    icon: '♡',  count:  0, color: '#ff5a32', locked: true },
-  { id: 1, name: 'Chill Vibes',       icon: '🌙', count: 24, color: '#5b6aff' },
-  { id: 2, name: 'Workout',           icon: '⚡', count: 18, color: '#ff5a32' },
-  { id: 3, name: 'Deep Focus',        icon: '◎',  count: 31, color: '#32c8a0' },
-  { id: 4, name: 'Late Night',        icon: '◈',  count: 12, color: '#c864f0' },
-  { id: 5, name: 'Road Trip',         icon: '◇',  count: 40, color: '#f0c832' },
-  { id: 6, name: 'Neue Entdeckungen', icon: '⊹',  count:  9, color: '#ff8c55' },
-]
+// ── Playlist Wheel — echte Daten vom Server ──
+const favPlaylist = { id: 'favorites', name: 'Lieblingssongs', icon: '♡', color: '#ff5a32' }
+const playlists = computed(() => [favPlaylist, ...plStore.playlists])
+
+onMounted(() => {
+  if (!plStore.playlists.length) plStore.load()
+})
 
 const wheelOpen    = ref(false)
 const wheelOriginX = ref(0)
@@ -154,7 +153,7 @@ function onBtnMouseleave(id) {
 function onWheelSelect(id) {
   selectedPlaylistId.value = id
   wheelOpen.value = false
-  router.push(`/playlists?id=${id}`)
+  router.push(`/playlists/${id}`)
 }
 
 function onWheelCancel() {
