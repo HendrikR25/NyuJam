@@ -4,6 +4,7 @@ import Search from '../views/Search.vue'
 import Playlists from '../views/Playlists.vue'
 import Player from '../views/Player.vue'
 import Radio from '@/views/Radio.vue'
+import PlaylistDetail from '@/views/PlaylistDetail.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -32,6 +33,10 @@ const router = createRouter({
       path: '/radio',
       name: 'radio',
       component: Radio,
+    },
+    {
+      path: '/playlists/:id',
+      component: PlaylistDetail,
     },
   ],
 })

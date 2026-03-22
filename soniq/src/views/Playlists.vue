@@ -123,7 +123,7 @@ const selectedPlaylist = computed(() =>
 )
 
 function selectPlaylist(id) {
-  selectedId.value = selectedId.value === id ? null : id
+  router.push(`/playlists/${id}`)
 }
 
 // ── Wheel ──
@@ -174,8 +174,8 @@ function cancelHold() {
 }
 
 function onWheelSelect(id) {
-  selectedId.value = id
   wheelOpen.value  = false
+  router.push(`/playlists/${id}`)
 }
 </script>
 
