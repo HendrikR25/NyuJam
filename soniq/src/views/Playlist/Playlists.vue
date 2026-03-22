@@ -15,33 +15,63 @@
 
     <div class="page-header">
       <h1 class="page-title">PLAYLISTS</h1>
-      <p class="page-sub">Klick zum Auswählen · Gedrückt halten für Rad</p>
+      <p class="page-sub">Klick zum Öffnen · Gedrückt halten für Rad</p>
     </div>
+
+    <!-- Server error -->
+    <div class="error-bar" v-if="store.error">⚠ {{ store.error }}</div>
 
     <!-- Playlist-Liste -->
     <div class="playlist-list">
+
+      <!-- Lieblingssongs (fixed) -->
       <div
-        v-for="(pl, idx) in playlists"
+        class="playlist-row"
+        :style="{ '--i': 0, '--color': '#ff5a32' }"
+        @click="router.push('/playlists/favorites')"
+      >
+        <div class="row-thumb" :style="{ background: '#ff5a32' }"><span>♡</span></div>
+        <div class="row-info">
+          <div class="row-name-wrap">
+            <span class="row-name">Lieblingssongs</span>
+            <span class="row-pin">♥ Favoriten</span>
+          </div>
+          <span class="row-meta">{{ likedCount }} Songs</span>
+        </div>
+      </div>
+
+      <!-- Loading skeletons -->
+      <div v-if="store.loading" v-for="i in 3" :key="'sk'+i" class="playlist-row playlist-row--skeleton" :style="{ '--i': i }">
+        <div class="row-thumb-sk"></div>
+        <div class="row-info">
+          <div class="sk-line sk-line--name"></div>
+          <div class="sk-line sk-line--meta"></div>
+        </div>
+      </div>
+
+      <!-- Server playlists -->
+      <div
+        v-for="(pl, idx) in store.playlists"
         :key="pl.id"
         class="playlist-row"
-        :class="{ selected: selectedId === pl.id }"
-        :style="{ '--i': idx, '--color': pl.color }"
-        @click="selectPlaylist(pl.id)"
+        :style="{ '--i': idx + 1, '--color': pl.color }"
+        @click="router.push(`/playlists/${pl.id}`)"
       >
         <div class="row-thumb" :style="{ background: pl.color }">
           <span>{{ pl.icon }}</span>
         </div>
         <div class="row-info">
-          <div class="row-name-wrap">
-            <span class="row-name">{{ pl.name }}</span>
-            <span class="row-pin" v-if="pl.pinned">♥ Favoriten</span>
-          </div>
-          <span class="row-meta">{{ pl.count }} Songs</span>
+          <span class="row-name">{{ pl.name }}</span>
+          <span class="row-meta">{{ pl.songs?.length ?? 0 }} Songs</span>
         </div>
-        <transition name="check-pop">
-          <span class="row-check" v-if="selectedId === pl.id">✓</span>
-        </transition>
+        <button class="row-delete" @click.stop="deletePlaylist(pl.id)" title="Löschen">✕</button>
       </div>
+
+      <!-- Create new -->
+      <button class="create-row" @click="showCreate = true">
+        <span class="cr-plus">+</span>
+        <span class="cr-label">Neue Playlist erstellen</span>
+      </button>
     </div>
 
     <!-- "Playlist wählen" Button mit Long-Press -->
@@ -90,91 +120,158 @@
       :open="wheelOpen"
       :origin-x="wheelOriginX"
       :origin-y="wheelOriginY"
-      :playlists="playlists"
+      :playlists="allPlaylists"
       @select="onWheelSelect"
       @cancel="wheelOpen = false"
     />
+
+    <!-- Create Modal -->
+    <transition name="modal-fade">
+      <div class="modal-overlay" v-if="showCreate" @click.self="showCreate = false">
+        <div class="modal-card">
+          <h2 class="modal-title">Neue Playlist</h2>
+
+          <!-- Icon picker -->
+          <div class="icon-picker">
+            <button
+              v-for="ic in iconOptions" :key="ic"
+              class="icon-opt" :class="{ active: newIcon === ic }"
+              @click="newIcon = ic"
+            >{{ ic }}</button>
+          </div>
+
+          <!-- Color picker -->
+          <div class="color-picker">
+            <button
+              v-for="col in colorOptions" :key="col"
+              class="color-opt" :class="{ active: newColor === col }"
+              :style="{ background: col }"
+              @click="newColor = col"
+            ></button>
+          </div>
+
+          <!-- Name input -->
+          <input
+            v-model="newName"
+            class="modal-input"
+            placeholder="Name der Playlist..."
+            maxlength="40"
+            @keydown.enter="submitCreate"
+            ref="nameInputRef"
+          />
+
+          <!-- Preview -->
+          <div class="modal-preview" :style="{ borderColor: newColor + '55' }">
+            <div class="mp-thumb" :style="{ background: newColor + '33' }">{{ newIcon }}</div>
+            <span class="mp-name">{{ newName || 'Playlist Name' }}</span>
+          </div>
+
+          <div class="modal-actions">
+            <button class="modal-cancel" @click="showCreate = false">Abbrechen</button>
+            <button
+              class="modal-submit"
+              :style="newName.trim() ? { background: newColor, boxShadow: `0 0 20px ${newColor}55` } : {}"
+              :disabled="!newName.trim() || creating"
+              @click="submitCreate"
+            >
+              {{ creating ? 'Erstelle...' : 'Erstellen' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
+import { usePlaylistsStore } from '@/stores/playlists'
+import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
 const route  = useRoute()
+const store  = usePlaylistsStore()
+const player = usePlayerStore()
 
-const playlists = [
-  { id: 0, name: 'Lieblingssongs',    icon: '♡',  count:  0, color: '#ff5a32', pinned: true },
-  { id: 1, name: 'Chill Vibes',       icon: '🌙', count: 24, color: '#5b6aff' },
-  { id: 2, name: 'Workout',           icon: '⚡', count: 18, color: '#ff5a32' },
-  { id: 3, name: 'Deep Focus',        icon: '◎',  count: 31, color: '#32c8a0' },
-  { id: 4, name: 'Late Night',        icon: '◈',  count: 12, color: '#c864f0' },
-  { id: 5, name: 'Road Trip',         icon: '◇',  count: 40, color: '#f0c832' },
-  { id: 6, name: 'Neue Entdeckungen', icon: '⊹',  count:  9, color: '#ff8c55' },
-]
+onMounted(() => store.load())
 
-// Vorauswahl wenn via HomeView-Rad navigiert
-const selectedId = ref(route.query.id ? Number(route.query.id) : null)
+const likedCount  = computed(() => player.isLiked ? 1 : 0)
+const favPlaylist = { id: 'favorites', name: 'Lieblingssongs', icon: '♡', color: '#ff5a32', songs: [] }
+const allPlaylists = computed(() => [favPlaylist, ...store.playlists])
 
-const selectedPlaylist = computed(() =>
-  playlists.find(p => p.id === selectedId.value) ?? null
-)
-
-function selectPlaylist(id) {
-  router.push(`/playlists/${id}`)
+async function deletePlaylist(id) {
+  if (!confirm('Playlist wirklich löschen?')) return
+  await store.remove(id)
 }
 
-// ── Wheel ──
+// ── Create Modal ────────────────────────────────────────
+const showCreate   = ref(false)
+const newName      = ref('')
+const newIcon      = ref('▤')
+const newColor     = ref('#5b6aff')
+const creating     = ref(false)
+const nameInputRef = ref(null)
+
+const iconOptions  = ['▤','♩','⚡','🌙','◎','⊹','◇','🌿','◈','⬡','♡','🎵']
+const colorOptions = ['#5b6aff','#ff5a32','#32c8a0','#c864f0','#f0c832','#ff8c55','#32a8c8','#a0c832']
+
+watch(showCreate, (val) => {
+  if (val) {
+    newName.value  = ''
+    newIcon.value  = '▤'
+    newColor.value = '#5b6aff'
+    nextTick(() => nameInputRef.value?.focus())
+  }
+})
+
+async function submitCreate() {
+  if (!newName.value.trim() || creating.value) return
+  creating.value = true
+  try {
+    const pl = await store.create({ name: newName.value, icon: newIcon.value, color: newColor.value })
+    showCreate.value = false
+    router.push(`/playlists/${pl.id}`)
+  } catch (e) {
+    alert('Fehler: ' + e.message)
+  } finally {
+    creating.value = false
+  }
+}
+
+// ── Wheel ───────────────────────────────────────────────
 const wheelOpen    = ref(false)
 const wheelOriginX = ref(0)
 const wheelOriginY = ref(0)
 const isHolding    = ref(false)
 const holdProgress = ref(0)
 
-const HOLD_MS      = 500
+const HOLD_MS       = 500
 const CIRCUMFERENCE = 2 * Math.PI * 24
-const ringOffset   = computed(() => CIRCUMFERENCE * (1 - holdProgress.value))
+const ringOffset    = computed(() => CIRCUMFERENCE * (1 - holdProgress.value))
 
-let progressRAF = null
-let holdStart   = 0
-let didOpen     = false
+let progressRAF = null, holdStart = 0, didOpen = false
 
 function startHold(e) {
-  didOpen = false
-  isHolding.value    = true
-  holdProgress.value = 0
+  didOpen = false; isHolding.value = true; holdProgress.value = 0
   holdStart = performance.now()
-
   const btn = e.currentTarget.getBoundingClientRect()
-  wheelOriginX.value = btn.left + btn.width  / 2
+  wheelOriginX.value = btn.left + btn.width / 2
   wheelOriginY.value = btn.top  + btn.height / 2
-
   function tick() {
-    const elapsed = performance.now() - holdStart
-    holdProgress.value = Math.min(elapsed / HOLD_MS, 1)
-    if (holdProgress.value < 1) {
-      progressRAF = requestAnimationFrame(tick)
-    } else {
-      didOpen            = true
-      isHolding.value    = false
-      holdProgress.value = 0
-      wheelOpen.value    = true
-    }
+    holdProgress.value = Math.min((performance.now() - holdStart) / HOLD_MS, 1)
+    if (holdProgress.value < 1) { progressRAF = requestAnimationFrame(tick) }
+    else { didOpen = true; isHolding.value = false; holdProgress.value = 0; wheelOpen.value = true }
   }
   progressRAF = requestAnimationFrame(tick)
 }
-
 function cancelHold() {
   if (didOpen) return
-  cancelAnimationFrame(progressRAF)
-  isHolding.value    = false
-  holdProgress.value = 0
+  cancelAnimationFrame(progressRAF); isHolding.value = false; holdProgress.value = 0
 }
-
 function onWheelSelect(id) {
-  wheelOpen.value  = false
+  wheelOpen.value = false
   router.push(`/playlists/${id}`)
 }
 </script>
@@ -293,8 +390,59 @@ function onWheelSelect(id) {
 .row-meta  { font-size: 0.72rem; color: rgba(240,237,230,0.3); letter-spacing: 0.05em; }
 .row-check { color: #ff5a32; font-size: 1rem; font-weight: 600; }
 
-.check-pop-enter-active { transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1), opacity 0.2s; }
-.check-pop-enter-from   { transform: scale(0); opacity: 0; }
+.row-delete { background: none; border: none; color: rgba(240,237,230,0.2); cursor: pointer; font-size: 0.75rem; padding: 0.2rem 0.4rem; transition: color 0.2s; flex-shrink: 0; }
+.row-delete:hover { color: #ff5a32; }
+
+.error-bar { position: relative; z-index: 1; width: 100%; max-width: 480px; background: rgba(255,90,50,0.1); border: 1px solid rgba(255,90,50,0.3); border-radius: 3px; padding: 0.55rem 1rem; font-size: 0.78rem; color: #ff8060; margin-bottom: 1rem; text-align: center; }
+
+/* Skeleton */
+.playlist-row--skeleton { pointer-events: none; }
+.row-thumb-sk { width: 42px; height: 42px; border-radius: 4px; background: rgba(240,237,230,0.06); flex-shrink: 0; animation: shimmer 1.5s infinite; }
+.sk-line { height: 10px; border-radius: 2px; background: linear-gradient(90deg, rgba(240,237,230,0.06) 25%, rgba(240,237,230,0.1) 50%, rgba(240,237,230,0.06) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; }
+.sk-line--name { width: 55%; margin-bottom: 0.4rem; }
+.sk-line--meta { width: 28%; }
+
+/* Create row */
+.create-row { display: flex; align-items: center; gap: 0.85rem; width: 100%; background: none; border: 1px dashed rgba(240,237,230,0.1); border-radius: 3px; padding: 0.9rem 1.1rem; cursor: pointer; color: rgba(240,237,230,0.3); font-family: 'DM Sans', sans-serif; transition: border-color 0.2s, color 0.2s, background 0.2s; margin-top: 0.2rem; }
+.create-row:hover { border-color: rgba(91,106,255,0.4); color: #f0ede6; background: rgba(91,106,255,0.05); }
+.cr-plus { font-size: 1.3rem; width: 42px; height: 42px; border-radius: 4px; background: rgba(91,106,255,0.1); border: 1px solid rgba(91,106,255,0.2); display: flex; align-items: center; justify-content: center; color: #5b6aff; flex-shrink: 0; }
+.cr-label { font-size: 0.9rem; font-weight: 500; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.modal-card { background: #0e0e1a; border: 1px solid rgba(240,237,230,0.1); border-radius: 10px; padding: 2rem 1.75rem; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 1.1rem; animation: modalPop 0.35s cubic-bezier(0.34,1.4,0.64,1) both; }
+.modal-title { font-family: 'Bebas Neue', cursive; font-size: 1.5rem; letter-spacing: 0.15em; color: #f0ede6; }
+
+.icon-picker { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.icon-opt { width: 36px; height: 36px; border-radius: 6px; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.08); cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+.icon-opt:hover { border-color: rgba(240,237,230,0.2); }
+.icon-opt.active { background: rgba(91,106,255,0.15); border-color: rgba(91,106,255,0.5); }
+
+.color-picker { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.color-opt { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform 0.15s, border-color 0.15s; }
+.color-opt:hover { transform: scale(1.15); }
+.color-opt.active { border-color: white; transform: scale(1.15); }
+
+.modal-input { width: 100%; background: rgba(240,237,230,0.05); border: 1px solid rgba(240,237,230,0.12); border-radius: 3px; padding: 0.75rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.95rem; color: #f0ede6; outline: none; transition: border-color 0.2s; }
+.modal-input:focus { border-color: rgba(91,106,255,0.45); }
+.modal-input::placeholder { color: rgba(240,237,230,0.22); }
+
+.modal-preview { display: flex; align-items: center; gap: 0.85rem; border: 1px solid; border-radius: 4px; padding: 0.75rem 1rem; }
+.mp-thumb { width: 40px; height: 40px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+.mp-name { font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.08em; color: rgba(240,237,230,0.7); }
+
+.modal-actions { display: flex; gap: 0.75rem; }
+.modal-cancel { flex: 1; background: rgba(240,237,230,0.05); border: 1px solid rgba(240,237,230,0.1); color: rgba(240,237,230,0.4); border-radius: 3px; padding: 0.7rem; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 0.88rem; transition: all 0.2s; }
+.modal-cancel:hover { color: #f0ede6; border-color: rgba(240,237,230,0.2); }
+.modal-submit { flex: 2; background: rgba(240,237,230,0.08); border: none; color: #0a0a0f; border-radius: 3px; padding: 0.7rem; cursor: pointer; font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.1em; transition: transform 0.15s; }
+.modal-submit:not(:disabled):hover { transform: scale(1.02); }
+.modal-submit:disabled { background: rgba(240,237,230,0.06); color: rgba(240,237,230,0.2); cursor: default; }
+
+.modal-fade-enter-active, .modal-fade-leave-active { transition: opacity 0.25s; }
+.modal-fade-enter-from, .modal-fade-leave-to { opacity: 0; }
+
+@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+@keyframes modalPop { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
 
 /* ── Wheel Button ── */
 .wheel-btn-wrap {
