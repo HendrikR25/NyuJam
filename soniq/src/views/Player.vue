@@ -87,7 +87,68 @@
       <button class="ctrl-btn ctrl-heart" :class="{ liked: player.isLiked }" @click="player.toggleLike()">
         <svg width="20" height="20" viewBox="0 0 24 24" :fill="player.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
+
+      <!-- Three dots menu -->
+      <div class="more-wrap" ref="moreWrapRef">
+        <button class="ctrl-btn ctrl-more" @click="toggleMenu" title="Mehr">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="5"  cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+          </svg>
+        </button>
+
+        <transition name="menu-pop">
+          <div class="more-menu" v-if="menuOpen">
+            <!-- Zu Lieblingssongs -->
+            <button class="menu-item" @click="addToFavorites">
+              <svg width="15" height="15" viewBox="0 0 24 24" :fill="player.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              <span>{{ player.isLiked ? 'Aus Lieblingssongs entfernen' : 'Zu Lieblingssongs' }}</span>
+            </button>
+
+            <!-- Zu Playlist hinzufügen -->
+            <button class="menu-item" @click="showPlaylistSub = !showPlaylistSub">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>Zu Playlist hinzufügen</span>
+              <span class="menu-arrow" :class="{ open: showPlaylistSub }">›</span>
+            </button>
+
+            <!-- Playlist sub-list -->
+            <transition name="sub-expand">
+              <div class="menu-sub" v-if="showPlaylistSub">
+                <div class="menu-sub-loading" v-if="playlistsStore.loading">Lade...</div>
+                <div class="menu-sub-empty" v-else-if="!playlistsStore.playlists.length">
+                  Noch keine Playlists
+                </div>
+                <button
+                  v-for="pl in playlistsStore.playlists"
+                  :key="pl.id"
+                  class="menu-sub-item"
+                  :class="{ added: addedPlaylists.has(pl.id) }"
+                  @click="addToPlaylist(pl)"
+                >
+                  <span class="msi-icon" :style="{ background: pl.color + '33' }">{{ pl.icon }}</span>
+                  <span class="msi-name">{{ pl.name }}</span>
+                  <span class="msi-check" v-if="addedPlaylists.has(pl.id)">✓</span>
+                </button>
+              </div>
+            </transition>
+
+            <div class="menu-divider"></div>
+
+            <!-- Zum Künstler -->
+            <button class="menu-item menu-item--disabled">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              <span>Zum Künstler</span>
+              <span class="menu-soon">bald</span>
+            </button>
+          </div>
+        </transition>
+      </div>
     </div>
+
+    <!-- Feedback toast -->
+    <transition name="toast-fade">
+      <div class="feedback-toast" v-if="feedbackMsg">{{ feedbackMsg }}</div>
+    </transition>
 
     <!-- Song list (if songs loaded) -->
     <div class="song-list" v-if="player.songs.length">
@@ -123,22 +184,70 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
+import { usePlaylistsStore } from '@/stores/playlists'
 
-const router = useRouter()
-const route  = useRoute()
-const player = usePlayerStore()
+const router         = useRouter()
+const route          = useRoute()
+const player         = usePlayerStore()
+const playlistsStore = usePlaylistsStore()
 
-// Load songs on mount if not already loaded
 onMounted(() => {
-  if (!player.songs.length) player.loadSongs()
+  if (!player.songs.length)           player.loadSongs()
+  if (!playlistsStore.playlists.length) playlistsStore.load()
   if (route.query.from) player.fromRoute = `/${route.query.from}`
+  document.addEventListener('click', onClickOutside)
 })
+onUnmounted(() => document.removeEventListener('click', onClickOutside))
 
 function goBack() {
   router.push(player.fromRoute || '/')
+}
+
+// ── Three-dots menu ────────────────────────────────
+const menuOpen       = ref(false)
+const showPlaylistSub = ref(false)
+const addedPlaylists = ref(new Set())
+const moreWrapRef    = ref(null)
+const feedbackMsg    = ref('')
+
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value
+  if (!menuOpen.value) showPlaylistSub.value = false
+}
+
+function onClickOutside(e) {
+  if (moreWrapRef.value && !moreWrapRef.value.contains(e.target)) {
+    menuOpen.value       = false
+    showPlaylistSub.value = false
+  }
+}
+
+function addToFavorites() {
+  player.toggleLike()
+  showFeedback(player.isLiked ? '♥ Zu Lieblingssongs hinzugefügt' : 'Aus Lieblingssongs entfernt')
+  menuOpen.value = false
+}
+
+async function addToPlaylist(pl) {
+  if (!player.currentSong) return
+  if (addedPlaylists.value.has(pl.id)) return
+  try {
+    await playlistsStore.addSong(pl.id, player.currentSong)
+    addedPlaylists.value = new Set([...addedPlaylists.value, pl.id])
+    showFeedback(`✓ Zu „${pl.name}" hinzugefügt`)
+  } catch {
+    showFeedback('Song bereits in dieser Playlist')
+  }
+}
+
+let feedbackTimer = null
+function showFeedback(msg) {
+  feedbackMsg.value = msg
+  clearTimeout(feedbackTimer)
+  feedbackTimer = setTimeout(() => { feedbackMsg.value = '' }, 2500)
 }
 
 // ── Cover visuals ──────────────────────────────────
@@ -258,6 +367,76 @@ function endScrub() {
 .ctrl-play:hover { transform: scale(1.08) !important; box-shadow: 0 0 40px #32c8a088 !important; }
 .ctrl-heart { color: rgba(240,237,230,0.35); }
 .ctrl-heart.liked { color: #ff5a32 !important; }
+
+/* ── Three-dots menu ── */
+.more-wrap { position: relative; }
+.ctrl-more { color: rgba(240,237,230,0.4) !important; }
+.ctrl-more:hover { color: #f0ede6 !important; }
+
+.more-menu {
+  position: absolute; bottom: calc(100% + 10px); right: 0;
+  min-width: 230px;
+  background: #121218;
+  border: 1px solid rgba(240,237,230,0.12);
+  border-radius: 8px;
+  padding: 0.4rem 0;
+  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+}
+
+.menu-item {
+  display: flex; align-items: center; gap: 0.7rem;
+  width: 100%; background: none; border: none; cursor: pointer;
+  color: rgba(240,237,230,0.7); font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem; padding: 0.65rem 1rem;
+  transition: background 0.15s, color 0.15s; text-align: left;
+}
+.menu-item:hover { background: rgba(240,237,230,0.06); color: #f0ede6; }
+.menu-item--disabled { opacity: 0.4; cursor: default; }
+.menu-item--disabled:hover { background: none; color: rgba(240,237,230,0.7); }
+.menu-arrow { margin-left: auto; font-size: 1rem; color: rgba(240,237,230,0.3); transition: transform 0.2s; }
+.menu-arrow.open { transform: rotate(90deg); }
+.menu-soon { margin-left: auto; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,237,230,0.25); background: rgba(240,237,230,0.06); border-radius: 3px; padding: 0.1rem 0.38rem; }
+.menu-divider { height: 1px; background: rgba(240,237,230,0.07); margin: 0.3rem 0; }
+
+/* Playlist sub-list */
+.menu-sub { background: rgba(0,0,0,0.2); border-top: 1px solid rgba(240,237,230,0.07); max-height: 180px; overflow-y: auto; }
+.menu-sub::-webkit-scrollbar { width: 3px; }
+.menu-sub::-webkit-scrollbar-thumb { background: rgba(240,237,230,0.1); }
+.menu-sub-loading, .menu-sub-empty { font-size: 0.72rem; color: rgba(240,237,230,0.3); padding: 0.6rem 1rem; }
+
+.menu-sub-item {
+  display: flex; align-items: center; gap: 0.6rem;
+  width: 100%; background: none; border: none; cursor: pointer;
+  color: rgba(240,237,230,0.6); font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem; padding: 0.55rem 1rem 0.55rem 1.2rem;
+  transition: background 0.15s, color 0.15s;
+}
+.menu-sub-item:hover { background: rgba(240,237,230,0.05); color: #f0ede6; }
+.menu-sub-item.added { color: #32c8a0; }
+.msi-icon { width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+.msi-name { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msi-check { color: #32c8a0; font-size: 0.75rem; flex-shrink: 0; }
+
+/* Feedback toast */
+.feedback-toast {
+  position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+  background: rgba(18,18,28,0.95); border: 1px solid rgba(240,237,230,0.15);
+  border-radius: 99px; padding: 0.55rem 1.3rem;
+  font-size: 0.8rem; color: #f0ede6; letter-spacing: 0.04em;
+  z-index: 500; white-space: nowrap;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+.toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.25s, transform 0.25s; }
+.toast-fade-enter-from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+.toast-fade-leave-to   { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
+/* Menu transitions */
+.menu-pop-enter-active, .menu-pop-leave-active { transition: opacity 0.18s, transform 0.18s; }
+.menu-pop-enter-from, .menu-pop-leave-to { opacity: 0; transform: scale(0.95) translateY(4px); }
+.sub-expand-enter-active, .sub-expand-leave-active { transition: max-height 0.25s ease, opacity 0.2s; overflow: hidden; }
+.sub-expand-enter-from, .sub-expand-leave-to { max-height: 0; opacity: 0; }
+.sub-expand-enter-to, .sub-expand-leave-from { max-height: 200px; opacity: 1; }
 
 /* Song list */
 .song-list { position: relative; z-index: 1; width: 100%; max-width: 420px; }

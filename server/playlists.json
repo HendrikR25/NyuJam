@@ -4,7 +4,14 @@
     "name": "Morning!",
     "icon": "⚡",
     "color": "#a0c832",
-    "songs": [],
+    "songs": [
+      {
+        "id": "1",
+        "name": "ewige Zeit",
+        "artist": "Meridon",
+        "addedAt": "2026-03-22T18:19:03.921Z"
+      }
+    ],
     "createdAt": "2026-03-22T18:17:07.676Z"
   }
 ]
