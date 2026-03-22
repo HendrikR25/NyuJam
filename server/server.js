@@ -303,3 +303,169 @@ app.patch('/api/auth/profile', (req, res) => {
 })
 
 app.listen(3001, '0.0.0.0', () => console.log('🎵 NyuJam server running on http://192.168.178.58:3001'))
+
+// ── Social helpers ─────────────────────────────────────
+const SOCIAL_FILE = path.join(__dirname, 'social.json')
+
+function loadSocial() {
+  if (!fs.existsSync(SOCIAL_FILE)) return { friendships: [], groups: [], messages: [] }
+  return JSON.parse(fs.readFileSync(SOCIAL_FILE, 'utf-8'))
+}
+function saveSocial(data) {
+  fs.writeFileSync(SOCIAL_FILE, JSON.stringify(data, null, 2))
+}
+function safeU(u) {
+  if (!u) return null
+  const { password, token, ...rest } = u
+  return rest
+}
+
+// ── Friends ────────────────────────────────────────────
+app.get('/api/friends', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { friendships } = loadSocial()
+  const users = loadUsers()
+  const friends = [], pending = []
+  friendships.forEach(f => {
+    const isA = f.userA === me.id, isB = f.userB === me.id
+    if (!isA && !isB) return
+    const otherId = isA ? f.userB : f.userA
+    const other = safeU(users.find(u => u.id === otherId))
+    if (!other) return
+    if (f.status === 'accepted') friends.push(other)
+    else if (f.status === 'pending' && f.userB === me.id) pending.push({ ...other, friendshipId: f.id })
+  })
+  res.json({ friends, pending })
+})
+
+app.post('/api/friends/request', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { username } = req.body
+  const users = loadUsers()
+  const target = users.find(u => u.username.toLowerCase() === username?.toLowerCase())
+  if (!target) return res.status(404).json({ error: 'Benutzer nicht gefunden.' })
+  if (target.id === me.id) return res.status(400).json({ error: 'Kannst du dir selbst nicht schicken.' })
+  const social = loadSocial()
+  const exists = social.friendships.find(f => (f.userA === me.id && f.userB === target.id) || (f.userA === target.id && f.userB === me.id))
+  if (exists) return res.status(409).json({ error: 'Anfrage bereits gesendet oder bereits Freunde.' })
+  social.friendships.push({ id: Date.now().toString(), userA: me.id, userB: target.id, status: 'pending', createdAt: new Date().toISOString() })
+  saveSocial(social)
+  res.json({ ok: true })
+})
+
+app.post('/api/friends/:friendshipId/respond', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { action } = req.body
+  const social = loadSocial()
+  const idx = social.friendships.findIndex(f => f.id === req.params.friendshipId && f.userB === me.id)
+  if (idx === -1) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (action === 'accept') social.friendships[idx].status = 'accepted'
+  else social.friendships.splice(idx, 1)
+  saveSocial(social)
+  res.json({ ok: true })
+})
+
+app.delete('/api/friends/:userId', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const social = loadSocial()
+  social.friendships = social.friendships.filter(f => !((f.userA === me.id && f.userB === req.params.userId) || (f.userA === req.params.userId && f.userB === me.id)))
+  saveSocial(social)
+  res.json({ ok: true })
+})
+
+// ── Groups ─────────────────────────────────────────────
+app.get('/api/groups', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { groups } = loadSocial()
+  res.json(groups.filter(g => g.members.includes(me.id)))
+})
+
+app.post('/api/groups', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { name, icon, color } = req.body
+  if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' })
+  const social = loadSocial()
+  const group = { id: Date.now().toString(), name: name.trim(), icon: icon || '⬡', color: color || '#32c8a0', hostId: me.id, members: [me.id], createdAt: new Date().toISOString() }
+  social.groups.push(group)
+  saveSocial(social)
+  res.status(201).json(group)
+})
+
+app.post('/api/groups/join', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { name } = req.body
+  const social = loadSocial()
+  const group = social.groups.find(g => g.name.toLowerCase() === name?.toLowerCase())
+  if (!group) return res.status(404).json({ error: 'Gruppe nicht gefunden.' })
+  if (group.members.includes(me.id)) return res.status(409).json({ error: 'Bereits Mitglied.' })
+  group.members.push(me.id)
+  saveSocial(social)
+  res.json(group)
+})
+
+app.delete('/api/groups/:id/leave', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const social = loadSocial()
+  const group = social.groups.find(g => g.id === req.params.id)
+  if (!group) return res.status(404).json({ error: 'Nicht gefunden' })
+  group.members = group.members.filter(id => id !== me.id)
+  if (group.members.length === 0) social.groups = social.groups.filter(g => g.id !== req.params.id)
+  saveSocial(social)
+  res.json({ ok: true })
+})
+
+// ── Messages ───────────────────────────────────────────
+app.get('/api/messages/:targetId', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { messages } = loadSocial()
+  const { targetId } = req.params
+  const conv = messages.filter(m =>
+    m.groupId === targetId ||
+    (m.toId === targetId && m.fromId === me.id) ||
+    (m.toId === me.id && m.fromId === targetId)
+  ).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  res.json(conv)
+})
+
+app.post('/api/messages', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { toId, groupId, text, songId, songName, songArtist } = req.body
+  if (!text && !songId) return res.status(400).json({ error: 'Text oder Song erforderlich' })
+  const social = loadSocial()
+  const msg = { id: Date.now().toString(), fromId: me.id, fromName: me.username, fromAvatar: me.avatar || null, toId: toId || null, groupId: groupId || null, text: text || null, songId: songId || null, songName: songName || null, songArtist: songArtist || null, createdAt: new Date().toISOString() }
+  social.messages.push(msg)
+  saveSocial(social)
+  res.status(201).json(msg)
+})
+
+app.get('/api/conversations', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { friendships, groups, messages } = loadSocial()
+  const users = loadUsers()
+  const myFriendIds = friendships
+    .filter(f => f.status === 'accepted' && (f.userA === me.id || f.userB === me.id))
+    .map(f => f.userA === me.id ? f.userB : f.userA)
+  const dms = myFriendIds.map(fId => {
+    const friend = safeU(users.find(u => u.id === fId))
+    if (!friend) return null
+    const msgs = messages.filter(m => (m.fromId === me.id && m.toId === fId) || (m.fromId === fId && m.toId === me.id)).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    const last = msgs[0] || null
+    return { type: 'dm', id: fId, name: friend.username, avatar: friend.avatar, lastMessage: last, unread: msgs.filter(m => m.toId === me.id && !m.read).length }
+  }).filter(Boolean)
+  const myGroups = groups.filter(g => g.members.includes(me.id)).map(g => {
+    const msgs = messages.filter(m => m.groupId === g.id).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    return { type: 'group', id: g.id, name: g.name, icon: g.icon, color: g.color, members: g.members.length, lastMessage: msgs[0] || null, unread: 0 }
+  })
+  res.json({ dms, groups: myGroups })
+})
