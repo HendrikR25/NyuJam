@@ -36,7 +36,9 @@
     <div class="song-info" v-if="player.currentSong">
       <h1 class="song-title">{{ player.currentSong.name }}</h1>
       <span class="song-sep">—</span>
-      <span class="song-artist">{{ player.currentSong.artist }}</span>
+      <button class="song-artist-btn" @click="router.push(`/artist/${encodeURIComponent(player.currentSong.artist)}`)">
+        {{ player.currentSong.artist }}
+      </button>
     </div>
     <div class="song-info song-info--empty" v-else>
       <span class="song-artist">Kein Song ausgewählt</span>
@@ -135,10 +137,9 @@
             <div class="menu-divider"></div>
 
             <!-- Zum Künstler -->
-            <button class="menu-item menu-item--disabled">
+            <button class="menu-item" @click="goToArtist" :disabled="!player.currentSong">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span>Zum Künstler</span>
-              <span class="menu-soon">bald</span>
             </button>
           </div>
         </transition>
@@ -230,6 +231,12 @@ function addToFavorites() {
   player.toggleLike()
   showFeedback(player.isLiked ? '♥ Zu Lieblingssongs hinzugefügt' : 'Aus Lieblingssongs entfernt')
   menuOpen.value = false
+}
+
+function goToArtist() {
+  if (!player.currentSong) return
+  menuOpen.value = false
+  router.push(`/artist/${encodeURIComponent(player.currentSong.artist)}`)
 }
 
 async function addToPlaylist(pl) {
@@ -339,7 +346,16 @@ function endScrub() {
 .song-info--empty { opacity: 0.4; }
 .song-title { font-family: 'Bebas Neue', cursive; font-size: 2rem; letter-spacing: 0.1em; color: #f0ede6; line-height: 1; }
 .song-sep { color: rgba(240,237,230,0.25); font-size: 1.1rem; }
-.song-artist { font-size: 0.9rem; font-weight: 300; color: rgba(240,237,230,0.5); letter-spacing: 0.06em; }
+.song-artist-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.9rem; font-weight: 300;
+  color: rgba(240,237,230,0.5); letter-spacing: 0.06em;
+  font-family: 'DM Sans', sans-serif;
+  padding: 0; transition: color 0.2s;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(240,237,230,0.2);
+}
+.song-artist-btn:hover { color: #f0ede6; text-decoration-color: rgba(240,237,230,0.5); }
 
 /* Progress */
 .progress-section { position: relative; z-index: 1; width: 100%; max-width: 380px; margin-bottom: 2.5rem; animation: fadeUp 0.5s 0.22s ease both; }

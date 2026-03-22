@@ -11,6 +11,7 @@ import Groups from '@/views/Community/Groups.vue'
 import Chats from '@/views/Chats/Chats.vue'
 import FriendsRadio from '@/views/Radio/FriendsRadio.vue'
 import Donation from '@/views/Donation/Donation.vue'
+import ArtistProfile from '@/views/Profiles/ArtistProfile.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -74,6 +75,11 @@ const router = createRouter({
       name: 'donation',
       component: Donation,
     },
+    {
+      path: '/artist/:name',
+      name: 'artist-profile',
+      component: ArtistProfile,
+    }
   ],
 })
 

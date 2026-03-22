@@ -66,10 +66,9 @@
           <div
             v-for="(item, i) in activeResults"
             :key="item.id"
-            class="result-card"
+            class="result-card clickable"
             :style="{ '--i': i }"
-            @click="activeTab === 'songs' ? playSong(item) : null"
-            :class="{ clickable: activeTab === 'songs' }"
+            @click="activeTab === 'songs' ? playSong(item) : goToArtist(item)"
           >
             <div class="card-thumb">
               <span class="card-thumb-icon">{{ activeTab === 'songs' ? '♩' : '◉' }}</span>
@@ -78,7 +77,7 @@
               <div class="card-title-real">{{ item.name }}</div>
               <div class="card-sub-real" v-if="item.artist">{{ item.artist }}</div>
             </div>
-            <span class="card-play" v-if="activeTab === 'songs'">▶</span>
+            <span class="card-play">{{ activeTab === 'songs' ? '▶' : '→' }}</span>
           </div>
         </div>
 
@@ -186,6 +185,10 @@ function playSong(song) {
   player.fromRoute = '/search'
   player.play(song)
   router.push('/player?from=search')
+}
+
+function goToArtist(item) {
+  router.push(`/artist/${encodeURIComponent(item.name)}`)
 }
 </script>
 
