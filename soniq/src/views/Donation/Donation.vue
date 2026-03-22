@@ -9,7 +9,7 @@
       <slot name="ad-top"><div class="ad-placeholder">Advertisement</div></slot>
     </div>
 
-    <button class="back-btn" @click="router.push('/')">← Zurück</button>
+    <NavBar back-to="/" />
 
     <!-- Header -->
     <div class="page-header">
@@ -205,6 +205,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import NavBar from '@/components/NavBar.vue'
 
 const router = useRouter()
 

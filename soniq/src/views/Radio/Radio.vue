@@ -14,6 +14,10 @@
     <!-- Back / Breadcrumb -->
     <div class="breadcrumb">
       <button class="bc-btn" @click="goBack">← Zurück</button>
+      <button class="bc-home" @click="router.push('/')" title="Home">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
+        Home
+      </button>
       <transition name="bc-fade">
         <span class="bc-trail" v-if="activeContinent || activeCountry">
           <span class="bc-sep">/</span>
@@ -153,6 +157,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
 import * as topojson from 'topojson-client'
+import NavBar from '@/components/NavBar.vue'
 
 const router = useRouter()
 
@@ -456,6 +461,14 @@ const glowStyle = computed(() => ({
   font-size: 0.78rem; letter-spacing: 0.1em; padding: 0; transition: color 0.2s;
 }
 .bc-btn:hover { color: #ff5a32; }
+.bc-home {
+  display: flex; align-items: center; gap: 0.3rem;
+  background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.08);
+  border-radius: 4px; padding: 0.28rem 0.6rem;
+  color: rgba(240,237,230,0.25); font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem; letter-spacing: 0.1em; cursor: pointer; transition: all 0.2s;
+}
+.bc-home:hover { color: #f0ede6; background: rgba(240,237,230,0.08); border-color: rgba(240,237,230,0.15); }
 .bc-trail { display: flex; align-items: center; gap: 0.4rem; }
 .bc-sep { color: rgba(240,237,230,0.2); font-size: 0.75rem; }
 .bc-crumb {

@@ -12,7 +12,7 @@
     </div>
 
     <!-- Zurück-Button -->
-    <button class="back-btn" @click="router.push('/')">← Zurück</button>
+    <NavBar back-to="/" />
 
     <!-- Suchbereich -->
     <div class="search-container">
@@ -108,6 +108,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
