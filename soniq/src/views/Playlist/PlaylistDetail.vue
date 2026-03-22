@@ -139,10 +139,14 @@ onMounted(async () => {
 })
 
 // ── Computed ───────────────────────────────────────────
-const songs = computed(() => playlist.value?.songs ?? [])
+// For favorites: use player.likedSongs directly (reactive)
+// For playlists: use playlist.value.songs
+const songs = computed(() => {
+  if (playlistId === 'favorites') return player.likedSongs
+  return playlist.value?.songs ?? []
+})
 
 const totalDuration = computed(() => {
-  // songs from server don't have duration field — just show count
   const count = songs.value.length
   return count === 0 ? '0 Songs' : `${count} Song${count !== 1 ? 's' : ''}`
 })
@@ -151,7 +155,6 @@ const totalDuration = computed(() => {
 const currentlyPlaying = ref(null)
 
 function playSong(song) {
-  // Find full song object in player store
   const fullSong = player.songs.find(s => String(s.id) === String(song.id))
   if (fullSong) {
     player.fromRoute = `/playlists/${playlistId}`
@@ -164,10 +167,13 @@ function playSong(song) {
 async function removeSong(song) {
   if (playlistId === 'favorites') {
     await fetch(`http://localhost:3001/api/favorites/${song.id}`, { method: 'DELETE' })
-    player.likedSongs = player.likedSongs.filter(f => String(f.id) !== String(song.id))
+    // mutate the reactive ref directly
+    player.likedSongs.splice(0, player.likedSongs.length, ...player.likedSongs.filter(f => String(f.id) !== String(song.id)))
   } else {
     await plStore.removeSong(playlistId, String(song.id))
-    playlist.value.songs = playlist.value.songs.filter(s => s.id !== song.id)
+    if (playlist.value?.songs) {
+      playlist.value.songs = playlist.value.songs.filter(s => String(s.id) !== String(song.id))
+    }
   }
 }
 </script>

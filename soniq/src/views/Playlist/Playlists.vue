@@ -195,9 +195,12 @@ const route  = useRoute()
 const store  = usePlaylistsStore()
 const player = usePlayerStore()
 
-onMounted(() => store.load())
+onMounted(async () => {
+  await store.load()
+  await player.loadFavorites()
+})
 
-const likedCount  = computed(() => player.isLiked ? 1 : 0)
+const likedCount   = computed(() => player.likedSongs.length)
 const favPlaylist = { id: 'favorites', name: 'Lieblingssongs', icon: '♡', color: '#ff5a32', songs: [] }
 const allPlaylists = computed(() => [favPlaylist, ...store.playlists])
 

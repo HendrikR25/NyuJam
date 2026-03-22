@@ -156,8 +156,6 @@ app.delete('/api/playlists/:id/songs/:songId', (req, res) => {
   res.json(pl)
 })
 
-app.listen(3001, () => console.log('🎵 NyuJam server running on http://localhost:3001'))
-
 // ── Favorites ──────────────────────────────────────────
 
 app.get('/api/favorites', (req, res) => {
@@ -180,3 +178,5 @@ app.delete('/api/favorites/:id', (req, res) => {
   saveFavorites(favs)
   res.json({ ok: true })
 })
+
+app.listen(3001, () => console.log('🎵 NyuJam server running on http://localhost:3001'))
