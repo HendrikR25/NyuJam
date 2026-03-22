@@ -74,6 +74,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     localStorage.removeItem('nyujam_user')
     localStorage.removeItem('nyujam_token')
+    // Clear user-specific data — import dynamically to avoid circular deps
+    import('@/stores/playlists').then(m => m.usePlaylistsStore().clear())
   }
 
   return { user, token, loading, error, isLoggedIn, register, login, updateProfile, logout }

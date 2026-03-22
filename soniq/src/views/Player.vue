@@ -124,12 +124,12 @@
                   v-for="pl in playlistsStore.playlists"
                   :key="pl.id"
                   class="menu-sub-item"
-                  :class="{ added: addedPlaylists.has(pl.id) }"
+                  :class="{ added: pl.songs?.some(s => String(s.id) === String(player.currentSong?.id)) }"
                   @click="addToPlaylist(pl)"
                 >
                   <span class="msi-icon" :style="{ background: pl.color + '33' }">{{ pl.icon }}</span>
                   <span class="msi-name">{{ pl.name }}</span>
-                  <span class="msi-check" v-if="addedPlaylists.has(pl.id)">✓</span>
+                  <span class="msi-check" v-if="pl.songs?.some(s => String(s.id) === String(player.currentSong?.id))">✓</span>
                 </button>
               </div>
             </transition>
@@ -209,10 +209,9 @@ function goBack() {
 }
 
 // ── Three-dots menu ────────────────────────────────
-const menuOpen       = ref(false)
+const menuOpen        = ref(false)
 const showPlaylistSub = ref(false)
-const addedPlaylists = ref(new Set())
-const moreWrapRef    = ref(null)
+const moreWrapRef     = ref(null)
 const feedbackMsg    = ref('')
 
 function toggleMenu() {
@@ -241,10 +240,11 @@ function goToArtist() {
 
 async function addToPlaylist(pl) {
   if (!player.currentSong) return
-  if (addedPlaylists.value.has(pl.id)) return
+  // Check if song is already in this playlist
+  const alreadyIn = pl.songs?.some(s => String(s.id) === String(player.currentSong.id))
+  if (alreadyIn) { showFeedback('Song bereits in dieser Playlist'); return }
   try {
     await playlistsStore.addSong(pl.id, player.currentSong)
-    addedPlaylists.value = new Set([...addedPlaylists.value, pl.id])
     showFeedback(`✓ Zu „${pl.name}" hinzugefügt`)
   } catch {
     showFeedback('Song bereits in dieser Playlist')

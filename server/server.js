@@ -79,29 +79,40 @@ app.get('/music/:filename', (req, res) => {
   }
 })
 
-// ── Playlists ──────────────────────────────────────────
+// ── Playlists (per user) ───────────────────────────────
 
-// GET all playlists
+function getUserPlaylists(userId) {
+  const all = loadPlaylists()
+  return all.filter(p => p.userId === userId)
+}
+
+// GET all playlists for current user
 app.get('/api/playlists', (req, res) => {
-  res.json(loadPlaylists())
+  const user = getUserFromToken(req)
+  if (!user) return res.json([])
+  res.json(getUserPlaylists(user.id))
 })
 
 // GET single playlist
 app.get('/api/playlists/:id', (req, res) => {
+  const user = getUserFromToken(req)
   const playlists = loadPlaylists()
-  const pl = playlists.find(p => p.id === req.params.id)
+  const pl = playlists.find(p => p.id === req.params.id && (!p.userId || p.userId === user?.id))
   if (!pl) return res.status(404).json({ error: 'Not found' })
   res.json(pl)
 })
 
 // POST create playlist
 app.post('/api/playlists', (req, res) => {
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { name, icon, color } = req.body
   if (!name?.trim()) return res.status(400).json({ error: 'Name required' })
 
   const playlists = loadPlaylists()
   const newPl = {
     id:        Date.now().toString(),
+    userId:    user.id,
     name:      name.trim(),
     icon:      icon  || '▤',
     color:     color || '#5b6aff',
@@ -113,10 +124,11 @@ app.post('/api/playlists', (req, res) => {
   res.status(201).json(newPl)
 })
 
-// PATCH rename playlist
+// PATCH playlist
 app.patch('/api/playlists/:id', (req, res) => {
+  const user = getUserFromToken(req)
   const playlists = loadPlaylists()
-  const idx = playlists.findIndex(p => p.id === req.params.id)
+  const idx = playlists.findIndex(p => p.id === req.params.id && p.userId === user?.id)
   if (idx === -1) return res.status(404).json({ error: 'Not found' })
 
   const { name, icon, color } = req.body
@@ -129,17 +141,18 @@ app.patch('/api/playlists/:id', (req, res) => {
 
 // DELETE playlist
 app.delete('/api/playlists/:id', (req, res) => {
+  const user = getUserFromToken(req)
   const playlists = loadPlaylists()
-  const filtered  = playlists.filter(p => p.id !== req.params.id)
-  if (filtered.length === playlists.length) return res.status(404).json({ error: 'Not found' })
+  const filtered = playlists.filter(p => !(p.id === req.params.id && p.userId === user?.id))
   savePlaylists(filtered)
   res.json({ ok: true })
 })
 
 // POST add song to playlist
 app.post('/api/playlists/:id/songs', (req, res) => {
+  const user = getUserFromToken(req)
   const playlists = loadPlaylists()
-  const pl = playlists.find(p => p.id === req.params.id)
+  const pl = playlists.find(p => p.id === req.params.id && p.userId === user?.id)
   if (!pl) return res.status(404).json({ error: 'Not found' })
 
   const { songId, name, artist } = req.body
@@ -153,8 +166,9 @@ app.post('/api/playlists/:id/songs', (req, res) => {
 
 // DELETE song from playlist
 app.delete('/api/playlists/:id/songs/:songId', (req, res) => {
+  const user = getUserFromToken(req)
   const playlists = loadPlaylists()
-  const pl = playlists.find(p => p.id === req.params.id)
+  const pl = playlists.find(p => p.id === req.params.id && p.userId === user?.id)
   if (!pl) return res.status(404).json({ error: 'Not found' })
 
   pl.songs = pl.songs.filter(s => s.id !== req.params.songId)
@@ -162,25 +176,36 @@ app.delete('/api/playlists/:id/songs/:songId', (req, res) => {
   res.json(pl)
 })
 
-// ── Favorites ──────────────────────────────────────────
+// ── Favorites (per user) ───────────────────────────────
+
+function getUserFavorites(userId) {
+  const all = loadFavorites()
+  return all.filter(f => f.userId === userId)
+}
 
 app.get('/api/favorites', (req, res) => {
-  res.json(loadFavorites())
+  const user = getUserFromToken(req)
+  if (!user) return res.json([])
+  res.json(getUserFavorites(user.id))
 })
 
 app.post('/api/favorites', (req, res) => {
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { id, name, artist } = req.body
   if (!id) return res.status(400).json({ error: 'id required' })
   const favs = loadFavorites()
-  if (favs.find(f => String(f.id) === String(id)))
+  if (favs.find(f => String(f.id) === String(id) && f.userId === user.id))
     return res.status(409).json({ error: 'Already in favorites' })
-  favs.push({ id: String(id), name, artist, addedAt: new Date().toISOString() })
+  favs.push({ id: String(id), name, artist, userId: user.id, addedAt: new Date().toISOString() })
   saveFavorites(favs)
   res.status(201).json({ ok: true })
 })
 
 app.delete('/api/favorites/:id', (req, res) => {
-  const favs = loadFavorites().filter(f => String(f.id) !== String(req.params.id))
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const favs = loadFavorites().filter(f => !(String(f.id) === String(req.params.id) && f.userId === user.id))
   saveFavorites(favs)
   res.json({ ok: true })
 })

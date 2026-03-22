@@ -67,9 +67,20 @@ export const usePlayerStore = defineStore('player', () => {
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
     audio.src         = song.url
     audio.load()
-    audio.play()
-      .then(() => { isPlaying.value = true })
-      .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+
+    const tryPlay = () => {
+      audio.play()
+        .then(() => { isPlaying.value = true; isLoading.value = false })
+        .catch(e => {
+          console.error('Playback error:', e, 'URL:', song.url)
+          error.value     = 'Wiedergabe fehlgeschlagen. Prüfe die Serververbindung.'
+          isPlaying.value = false
+          isLoading.value = false
+        })
+    }
+    audio.addEventListener('canplay', tryPlay, { once: true })
+    // Fallback timeout
+    setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
   function togglePlay() {
@@ -103,12 +114,16 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   // ── Favorites ──────────────────────────────────────────
+  function authHeader() {
+    const token = localStorage.getItem('nyujam_token') || ''
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
+  }
+
   async function loadFavorites() {
     try {
-      const res = await fetch(`${BASE_URL}/api/favorites`)
+      const res = await fetch(`${BASE_URL}/api/favorites`, { headers: authHeader() })
       if (!res.ok) return
       likedSongs.value = await res.json()
-      // sync isLiked for current song
       if (currentSong.value) {
         isLiked.value = likedSongs.value.some(f => String(f.id) === String(currentSong.value.id))
       }
@@ -120,23 +135,22 @@ export const usePlayerStore = defineStore('player', () => {
     const song = currentSong.value
 
     if (isLiked.value) {
-      // Remove from favorites
       try {
-        await fetch(`${BASE_URL}/api/favorites/${song.id}`, { method: 'DELETE' })
+        await fetch(`${BASE_URL}/api/favorites/${song.id}`, {
+          method: 'DELETE', headers: authHeader()
+        })
       } catch { /* offline */ }
       const idx = likedSongs.value.findIndex(f => String(f.id) === String(song.id))
       if (idx !== -1) likedSongs.value.splice(idx, 1)
       isLiked.value = false
     } else {
-      // Add to favorites
       try {
         await fetch(`${BASE_URL}/api/favorites`, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...authHeader() },
           body:    JSON.stringify({ id: String(song.id), name: song.name, artist: song.artist }),
         })
       } catch { /* offline */ }
-      // Add to local list if not already there
       if (!likedSongs.value.some(f => String(f.id) === String(song.id))) {
         likedSongs.value.push({ id: String(song.id), name: song.name, artist: song.artist })
       }

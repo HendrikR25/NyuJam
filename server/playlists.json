@@ -1,17 +1,30 @@
 [
   {
-    "id": "1774203427676",
-    "name": "Morning!",
-    "icon": "⚡",
-    "color": "#a0c832",
+    "id": "1774219555230",
+    "userId": "1774215641589",
+    "name": "LoveThis!",
+    "icon": "▤",
+    "color": "#5b6aff",
     "songs": [
       {
         "id": "1",
+        "name": "endings",
+        "artist": "Meridon",
+        "addedAt": "2026-03-22T22:46:26.041Z"
+      },
+      {
+        "id": "2",
         "name": "ewige Zeit",
         "artist": "Meridon",
-        "addedAt": "2026-03-22T18:39:31.984Z"
+        "addedAt": "2026-03-22T22:50:54.047Z"
+      },
+      {
+        "id": "6",
+        "name": "savage",
+        "artist": "Meridon",
+        "addedAt": "2026-03-22T22:51:03.176Z"
       }
     ],
-    "createdAt": "2026-03-22T18:17:07.676Z"
+    "createdAt": "2026-03-22T22:45:55.230Z"
   }
 ]
