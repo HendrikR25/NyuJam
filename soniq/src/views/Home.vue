@@ -18,6 +18,14 @@
         <span class="logo-text">NyuJam</span>
       </div>
       <div class="header-sub">your universe of sound</div>
+      <!-- Profile button -->
+      <button class="profile-btn" @click="router.push('/profile')" title="Profil">
+        <div class="pb-avatar" v-if="auth.user">
+          <img v-if="auth.user.avatar" :src="auth.user.avatar" class="pb-img" />
+          <span v-else class="pb-initials">{{ auth.user.username.slice(0,2).toUpperCase() }}</span>
+        </div>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </button>
     </header>
 
     <main class="nav-grid">
@@ -78,10 +86,12 @@ import { useRouter } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
 import { usePlayerStore } from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'
+import { useAuthStore } from '@/stores/auth'
 
-const router = useRouter()
-const player = usePlayerStore()
+const router  = useRouter()
+const player  = usePlayerStore()
 const plStore = usePlaylistsStore()
+const auth    = useAuthStore()
 const hovered = ref(null)
 
 const navItems = [
@@ -244,7 +254,21 @@ function navigate(id) {
   text-align: center;
   margin-bottom: 3.5rem;
   animation: fadeDown 0.6s ease both;
+  width: 100%; max-width: 420px;
 }
+.profile-btn {
+  position: absolute; top: 0; right: 0;
+  width: 38px; height: 38px; border-radius: 50%;
+  background: rgba(240,237,230,0.06);
+  border: 1px solid rgba(240,237,230,0.12);
+  color: rgba(240,237,230,0.4);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.profile-btn:hover { color: #f0ede6; border-color: rgba(240,237,230,0.25); background: rgba(240,237,230,0.1); }
+.pb-avatar { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.pb-img { width: 100%; height: 100%; object-fit: cover; }
+.pb-initials { font-size: 0.65rem; font-weight: 700; color: #f0ede6; }
 .logo {
   display: flex; align-items: center; gap: 0.5rem;
   justify-content: center;

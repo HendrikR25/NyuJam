@@ -179,4 +179,96 @@ app.delete('/api/favorites/:id', (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Auth ───────────────────────────────────────────────
+const USERS_FILE = path.join(__dirname, 'users.json')
+
+function loadUsers() {
+  if (!fs.existsSync(USERS_FILE)) return []
+  return JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'))
+}
+function saveUsers(data) {
+  fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2))
+}
+function simpleToken(id) {
+  return Buffer.from(`${id}:${Date.now()}`).toString('base64')
+}
+function getUserFromToken(req) {
+  const auth = req.headers.authorization ?? ''
+  const tok  = auth.replace('Bearer ', '')
+  if (!tok) return null
+  const users = loadUsers()
+  return users.find(u => u.token === tok) ?? null
+}
+
+// Register
+app.post('/api/auth/register', (req, res) => {
+  const { username, email, password } = req.body
+  if (!username?.trim() || !email?.trim() || !password)
+    return res.status(400).json({ error: 'Alle Felder sind erforderlich.' })
+
+  const users = loadUsers()
+  if (users.find(u => u.username.toLowerCase() === username.toLowerCase()))
+    return res.status(409).json({ error: 'Benutzername bereits vergeben.' })
+  if (users.find(u => u.email.toLowerCase() === email.toLowerCase()))
+    return res.status(409).json({ error: 'E-Mail bereits registriert.' })
+
+  const newUser = {
+    id:        Date.now().toString(),
+    username:  username.trim(),
+    email:     email.trim().toLowerCase(),
+    password,  // plain text for prototype — use bcrypt in production
+    bio:       '',
+    isPublic:  true,
+    avatar:    null,
+    createdAt: new Date().toISOString(),
+    token:     '',
+  }
+  newUser.token = simpleToken(newUser.id)
+  users.push(newUser)
+  saveUsers(users)
+
+  const { password: _, ...safeUser } = newUser
+  res.status(201).json({ user: safeUser, token: newUser.token })
+})
+
+// Login
+app.post('/api/auth/login', (req, res) => {
+  const { identifier, password } = req.body
+  if (!identifier || !password)
+    return res.status(400).json({ error: 'Benutzername/E-Mail und Passwort erforderlich.' })
+
+  const users = loadUsers()
+  const user  = users.find(u =>
+    (u.username.toLowerCase() === identifier.toLowerCase() ||
+     u.email.toLowerCase()    === identifier.toLowerCase()) &&
+    u.password === password
+  )
+  if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
+
+  user.token = simpleToken(user.id)
+  saveUsers(users)
+
+  const { password: _, ...safeUser } = user
+  res.json({ user: safeUser, token: user.token })
+})
+
+// Update profile
+app.patch('/api/auth/profile', (req, res) => {
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt.' })
+
+  const users = loadUsers()
+  const idx   = users.findIndex(u => u.id === user.id)
+  if (idx === -1) return res.status(404).json({ error: 'User nicht gefunden.' })
+
+  const { bio, isPublic, avatar } = req.body
+  if (bio      !== undefined) users[idx].bio      = bio
+  if (isPublic !== undefined) users[idx].isPublic = isPublic
+  if (avatar   !== undefined) users[idx].avatar   = avatar
+  saveUsers(users)
+
+  const { password: _, ...safeUser } = users[idx]
+  res.json({ user: safeUser })
+})
+
 app.listen(3001, () => console.log('🎵 NyuJam server running on http://localhost:3001'))
