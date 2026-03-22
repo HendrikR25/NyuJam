@@ -13,8 +13,12 @@
       </slot>
     </div>
 
-    <!-- Back -->
-    <button class="back-btn" @click="router.push('/')">← Zurück</button>
+    <!-- Dismiss handle -->
+    <button class="dismiss-btn" @click="goBack" aria-label="Schließen">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="18 15 12 9 6 15"/>
+      </svg>
+    </button>
 
     <!-- Cover -->
     <div class="cover-wrap">
@@ -113,9 +117,16 @@
 
 <script setup>
 import { ref, computed, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route  = useRoute()
+
+function goBack() {
+  const from = route.query.from
+  if (from) router.push(`/${from}`)
+  else router.push('/')
+}
 
 // Demo song data
 const song = ref({
@@ -247,14 +258,20 @@ onUnmounted(() => { clearInterval(ticker) })
   text-transform: uppercase; color: rgba(240,237,230,0.15);
 }
 
-.back-btn {
-  position: relative; z-index: 1; align-self: flex-start;
+.dismiss-btn {
+  position: relative; z-index: 1;
   background: none; border: none; cursor: pointer;
-  color: rgba(240,237,230,0.3); font-family: 'DM Sans', sans-serif;
-  font-size: 0.78rem; letter-spacing: 0.1em;
-  padding: 0.4rem 0; margin-bottom: 1.5rem; transition: color 0.2s;
+  color: rgba(240,237,230,0.25);
+  padding: 0.5rem;
+  margin-bottom: 0.5rem;
+  margin-top: 0.25rem;
+  transition: color 0.2s, transform 0.2s;
+  display: flex; align-items: center; justify-content: center;
 }
-.back-btn:hover { color: #32c8a0; }
+.dismiss-btn:hover {
+  color: rgba(240,237,230,0.6);
+  transform: translateY(-2px);
+}
 
 /* ── Cover ── */
 .cover-wrap {

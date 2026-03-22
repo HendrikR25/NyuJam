@@ -26,6 +26,10 @@
           </template>
         </span>
       </transition>
+      <button class="friends-radio-btn" @click="router.push('/friends-radio')">
+        <span class="fr-icon">◎</span>
+        Freunde Radio
+      </button>
     </div>
 
     <!-- Title -->
@@ -456,6 +460,19 @@ const glowStyle = computed(() => ({
 }
 .bc-crumb:hover { color: #f0ede6; }
 .bc-crumb--active { color: #f0ede6; cursor: default; }
+
+.friends-radio-btn {
+  margin-left: auto;
+  display: flex; align-items: center; gap: 0.4rem;
+  background: rgba(91,106,255,0.1);
+  border: 1px solid rgba(91,106,255,0.3);
+  border-radius: 99px; padding: 0.32rem 0.85rem;
+  color: #5b6aff; font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem; letter-spacing: 0.06em;
+  cursor: pointer; transition: background 0.2s, border-color 0.2s;
+}
+.friends-radio-btn:hover { background: rgba(91,106,255,0.2); border-color: rgba(91,106,255,0.5); }
+.fr-icon { font-size: 0.8rem; }
 
 /* ── Header ── */
 .page-header { position: relative; z-index: 1; margin-bottom: 1rem; }
