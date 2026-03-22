@@ -87,6 +87,7 @@ const navItems = [
   { id: 'playlists', icon: '▤',  label: 'Playlists' },
   { id: 'community', icon: '◎',  label: 'Freunde' },
   { id: 'chats',     icon: '⌲',  label: 'Chats' },
+  { id: 'donation',  icon: '€',  label: 'Spende' },
 ]
 
 // ── Playlist Wheel ──
