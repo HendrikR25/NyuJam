@@ -60,11 +60,11 @@
     />
 
     <footer class="footer">
-      <button class="now-playing" v-if="playing" @click="router.push('/player')">
-        <span class="np-dot"></span>
+      <button class="now-playing" v-if="player.currentSong" @click="router.push('/player')">
+        <span class="np-dot" :class="{ paused: !player.isPlaying }"></span>
         <div class="np-info">
-          <span class="np-label">now playing</span>
-          <span class="np-text">Bonobo · Kiara</span>
+          <span class="np-label">{{ player.isPlaying ? 'now playing' : 'pausiert' }}</span>
+          <span class="np-text">{{ player.currentSong.artist }} · {{ player.currentSong.name }}</span>
         </div>
         <span class="np-arrow">▶</span>
       </button>
@@ -76,10 +76,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
+import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
+const player = usePlayerStore()
 const hovered = ref(null)
-const playing = ref(true)
 
 const navItems = [
   { id: 'radio',     icon: '⌇',  label: 'Radio' },
@@ -404,6 +405,10 @@ function navigate(id) {
   border-radius: 50%;
   background: #ff5a32;
   animation: pulse 1.6s ease infinite;
+}
+.np-dot.paused {
+  background: rgba(240,237,230,0.3);
+  animation: none;
 }
 .np-info {
   display: flex; flex-direction: column; gap: 0.05rem; text-align: left;
