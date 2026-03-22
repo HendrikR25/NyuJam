@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
-const BASE_URL = 'http://localhost:3001'
+const BASE_URL = 'http://192.168.178.58:3001'
 
 export const useAuthStore = defineStore('auth', () => {
   const user    = ref(JSON.parse(localStorage.getItem('nyujam_user') || 'null'))

@@ -32,6 +32,7 @@ function saveFavorites(data) {
 // ── Songs ──────────────────────────────────────────────
 app.get('/api/songs', (req, res) => {
   const files = fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith('.mp3'))
+  const host  = `${req.protocol}://${req.headers.host}`
   const songs = files.map((file, i) => {
     const name  = file.replace('.mp3', '')
     const parts = name.split(' - ')
@@ -40,7 +41,7 @@ app.get('/api/songs', (req, res) => {
       artist: parts[0]?.trim() ?? 'Unbekannt',
       name:   parts[1]?.trim() ?? name,
       file,
-      url: `http://localhost:3001/music/${encodeURIComponent(file)}`,
+      url: `${host}/music/${encodeURIComponent(file)}`,
     }
   })
   res.json(songs)
@@ -50,6 +51,11 @@ app.get('/api/songs', (req, res) => {
 app.get('/music/:filename', (req, res) => {
   const filePath = path.join(MUSIC_DIR, req.params.filename)
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found')
+
+  // Explicit CORS for audio streaming
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Headers', 'Range')
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges')
 
   const stat  = fs.statSync(filePath)
   const range = req.headers.range
@@ -271,4 +277,4 @@ app.patch('/api/auth/profile', (req, res) => {
   res.json({ user: safeUser })
 })
 
-app.listen(3001, () => console.log('🎵 NyuJam server running on http://localhost:3001'))
+app.listen(3001, '0.0.0.0', () => console.log('🎵 NyuJam server running on http://192.168.178.58:3001'))

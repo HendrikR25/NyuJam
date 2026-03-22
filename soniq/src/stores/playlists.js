@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const BASE_URL = 'http://localhost:3001'
+const BASE_URL = 'http://192.168.178.58:3001'
 
 export const usePlaylistsStore = defineStore('playlists', () => {
   const playlists = ref([])
