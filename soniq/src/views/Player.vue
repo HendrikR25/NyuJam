@@ -196,6 +196,7 @@ const playlistsStore = usePlaylistsStore()
 
 onMounted(() => {
   if (!player.songs.length)           player.loadSongs()
+  if (!player.likedSongs.length)      player.loadFavorites()
   if (!playlistsStore.playlists.length) playlistsStore.load()
   if (route.query.from) player.fromRoute = `/${route.query.from}`
   document.addEventListener('click', onClickOutside)

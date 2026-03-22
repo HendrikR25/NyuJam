@@ -14,7 +14,38 @@ export const usePlayerStore = defineStore('player', () => {
   const error        = ref(null)
   const volume       = ref(1)
   const isLiked      = ref(false)
-  const fromRoute    = ref('/')   // where to navigate back to
+  const likedSongs   = ref([])   // full list from server
+  const fromRoute    = ref('/')
+
+  async function loadFavorites() {
+    try {
+      const res = await fetch(`${BASE_URL}/api/favorites`)
+      likedSongs.value = await res.json()
+    } catch { /* server offline */ }
+  }
+
+  function isSongLiked(song) {
+    return likedSongs.value.some(f => String(f.id) === String(song?.id))
+  }
+
+  async function toggleLike() {
+    if (!currentSong.value) return
+    const song = currentSong.value
+    const liked = isSongLiked(song)
+    if (liked) {
+      await fetch(`${BASE_URL}/api/favorites/${song.id}`, { method: 'DELETE' })
+      likedSongs.value = likedSongs.value.filter(f => String(f.id) !== String(song.id))
+      isLiked.value = false
+    } else {
+      await fetch(`${BASE_URL}/api/favorites`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: String(song.id), name: song.name, artist: song.artist }),
+      })
+      likedSongs.value.push({ id: String(song.id), name: song.name, artist: song.artist })
+      isLiked.value = true
+    }
+  }
 
   // internal Audio instance — one global instance
   let _audio = null
@@ -76,7 +107,7 @@ export const usePlayerStore = defineStore('player', () => {
     currentSong.value = song
     isPlaying.value  = false
     isLoading.value  = true
-    isLiked.value    = false
+    isLiked.value    = isSongLiked(song)
     error.value      = null
     currentTime.value = 0
     duration.value   = 0
@@ -148,11 +179,11 @@ export const usePlayerStore = defineStore('player', () => {
   return {
     // state
     songs, currentSong, isPlaying, currentTime, duration,
-    isLoading, error, volume, isLiked, fromRoute,
+    isLoading, error, volume, isLiked, likedSongs, fromRoute,
     // getters
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
-    loadSongs, play, togglePlay, seek, seekByPct,
-    next, prev, setVolume, toggleLike, formatTime,
+    loadSongs, loadFavorites, play, togglePlay, seek, seekByPct,
+    next, prev, setVolume, toggleLike, isSongLiked, formatTime,
   }
 })

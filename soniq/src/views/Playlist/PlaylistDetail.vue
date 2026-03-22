@@ -1,7 +1,7 @@
 <template>
   <div class="detail-page">
     <div class="bg-noise"></div>
-    <div class="cover-glow" :style="{ background: `radial-gradient(ellipse 80% 50% at 50% 0%, ${playlist.color}20 0%, transparent 65%)` }"></div>
+    <div class="cover-glow" :style="playlist ? { background: `radial-gradient(ellipse 80% 50% at 50% 0%, ${playlist.color}20 0%, transparent 65%)` } : {}"></div>
 
     <!-- Ad Banner -->
     <div class="ad-banner">
@@ -14,172 +14,161 @@
     <!-- Back -->
     <button class="back-btn" @click="router.push('/playlists')">← Playlists</button>
 
-    <!-- Header -->
-    <div class="playlist-header">
-      <div class="pl-cover" :style="{ background: playlist.color + '33', borderColor: playlist.color + '55' }">
-        <span class="pl-cover-icon">{{ playlist.icon }}</span>
-      </div>
-      <div class="pl-meta">
-        <span class="pl-tag" v-if="playlist.pinned">♥ Favoriten</span>
-        <h1 class="pl-title">{{ playlist.name }}</h1>
-        <p class="pl-info">{{ playlist.songs.length }} Songs · {{ totalDuration }}</p>
-      </div>
+    <!-- Loading -->
+    <div class="loading-state" v-if="loading">
+      <span class="load-dot"></span><span class="load-dot"></span><span class="load-dot"></span>
     </div>
 
-    <!-- Play all button -->
-    <div class="pl-actions">
-      <button class="btn-play-all" :style="{ '--color': playlist.color }">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        Alle abspielen
-      </button>
-      <button class="btn-shuffle">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/>
-          <polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/>
-        </svg>
-        Shuffle
-      </button>
-    </div>
-
-    <!-- Song list -->
-    <div class="song-list" v-if="playlist.songs.length > 0">
-      <div
-        v-for="(song, idx) in playlist.songs"
-        :key="song.id"
-        class="song-row"
-        :class="{ playing: currentlyPlaying === song.id }"
-        :style="{ '--i': idx, '--color': playlist.color }"
-        @click="playSong(song)"
-      >
-        <div class="song-num">
-          <span v-if="currentlyPlaying !== song.id" class="num-text">{{ idx + 1 }}</span>
-          <span v-else class="num-wave">
-            <span></span><span></span><span></span>
-          </span>
+    <template v-else-if="playlist">
+      <!-- Header -->
+      <div class="playlist-header">
+        <div class="pl-cover" :style="{ background: playlist.color + '33', borderColor: playlist.color + '55' }">
+          <span class="pl-cover-icon">{{ playlist.icon }}</span>
         </div>
-        <div class="song-info">
-          <span class="song-name" :class="{ 'song-name--playing': currentlyPlaying === song.id }">{{ song.name }}</span>
-          <span class="song-artist">{{ song.artist }}</span>
+        <div class="pl-meta">
+          <span class="pl-tag" v-if="playlist.pinned">♥ Favoriten</span>
+          <h1 class="pl-title">{{ playlist.name }}</h1>
+          <p class="pl-info">{{ totalDuration }}</p>
         </div>
-        <span class="song-duration">{{ song.duration }}</span>
-        <button class="song-more" @click.stop>···</button>
       </div>
-    </div>
 
-    <!-- Empty state (Lieblingssongs) -->
+      <!-- Play all -->
+      <div class="pl-actions" v-if="songs.length">
+        <button class="btn-play-all" :style="{ '--color': playlist.color }" @click="playSong(songs[0])">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          Alle abspielen
+        </button>
+        <button class="btn-shuffle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/></svg>
+          Shuffle
+        </button>
+      </div>
+
+      <!-- Song list -->
+      <div class="song-list" v-if="songs.length">
+        <div
+          v-for="(song, idx) in songs"
+          :key="song.id"
+          class="song-row"
+          :class="{ playing: currentlyPlaying === song.id }"
+          :style="{ '--i': idx, '--color': playlist.color }"
+          @click="playSong(song)"
+        >
+          <div class="song-num">
+            <span v-if="currentlyPlaying !== song.id" class="num-text">{{ idx + 1 }}</span>
+            <span v-else class="num-wave"><span></span><span></span><span></span></span>
+          </div>
+          <div class="song-info">
+            <span class="song-name" :class="{ 'song-name--playing': currentlyPlaying === song.id }">{{ song.name }}</span>
+            <span class="song-artist">{{ song.artist }}</span>
+          </div>
+          <button class="song-remove" @click.stop="removeSong(song)" title="Entfernen">✕</button>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div class="empty-state" v-else>
+        <span class="empty-icon">{{ playlist.pinned ? '♡' : '▤' }}</span>
+        <p class="empty-title">{{ playlist.pinned ? 'Noch keine Lieblingssongs' : 'Playlist ist leer' }}</p>
+        <p class="empty-sub" v-if="playlist.pinned">Drücke das Herz-Symbol im Player, um Songs hier zu speichern.</p>
+        <p class="empty-sub" v-else>Füge Songs über den Player hinzu (··· → Zu Playlist hinzufügen).</p>
+      </div>
+    </template>
+
+    <!-- Not found -->
     <div class="empty-state" v-else>
-      <span class="empty-icon">♡</span>
-      <p class="empty-title">Noch keine Lieblingssongs</p>
-      <p class="empty-sub">Drücke das Herz-Symbol im Player, um Songs hier zu speichern.</p>
+      <span class="empty-icon">▤</span>
+      <p class="empty-title">Playlist nicht gefunden</p>
     </div>
 
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { usePlaylistsStore } from '@/stores/playlists'
+import { usePlayerStore }    from '@/stores/player'
 
-const router = useRouter()
-const route  = useRoute()
-const id     = Number(route.params.id)
+const router  = useRouter()
+const route   = useRoute()
+const plStore = usePlaylistsStore()
+const player  = usePlayerStore()
 
-// ── Demo song data per playlist ────────────────────────
-const allPlaylists = [
-  {
-    id: 0, name: 'Lieblingssongs', icon: '♡', color: '#ff5a32', pinned: true,
-    songs: [],
-  },
-  {
-    id: 1, name: 'Chill Vibes', icon: '🌙', color: '#5b6aff',
-    songs: [
-      { id: 101, name: 'Kiara',            artist: 'Bonobo',         duration: '3:57' },
-      { id: 102, name: 'Sunset Lover',     artist: 'Petit Biscuit',  duration: '3:43' },
-      { id: 103, name: 'Bloom',            artist: 'Odesza',         duration: '4:12' },
-      { id: 104, name: 'Numb',             artist: 'Portishead',     duration: '3:54' },
-      { id: 105, name: 'Thinkin Bout You', artist: 'Frank Ocean',    duration: '3:21' },
-      { id: 106, name: 'Re: Stacks',       artist: 'Bon Iver',       duration: '4:19' },
-      { id: 107, name: 'Motion Picture',   artist: 'Everything Everything', duration: '3:48' },
-    ],
-  },
-  {
-    id: 2, name: 'Workout', icon: '⚡', color: '#ff5a32',
-    songs: [
-      { id: 201, name: 'HUMBLE.',          artist: 'Kendrick Lamar', duration: '2:57' },
-      { id: 202, name: 'Power',            artist: 'Kanye West',     duration: '4:52' },
-      { id: 203, name: 'Lose Yourself',    artist: 'Eminem',         duration: '5:26' },
-      { id: 204, name: 'Pump It',          artist: 'Black Eyed Peas',duration: '3:33' },
-      { id: 205, name: 'Stronger',         artist: 'Kanye West',     duration: '5:11' },
-      { id: 206, name: 'Eye of the Tiger', artist: 'Survivor',       duration: '4:03' },
-    ],
-  },
-  {
-    id: 3, name: 'Deep Focus', icon: '◎', color: '#32c8a0',
-    songs: [
-      { id: 301, name: 'Experience',       artist: 'Ludovico Einaudi', duration: '5:14' },
-      { id: 302, name: 'Divenire',         artist: 'Ludovico Einaudi', duration: '6:51' },
-      { id: 303, name: 'Comptine',         artist: 'Yann Tiersen',     duration: '2:22' },
-      { id: 304, name: 'Avril 14th',       artist: 'Aphex Twin',       duration: '2:05' },
-      { id: 305, name: 'On the Nature',    artist: 'Jon Hopkins',      duration: '9:02' },
-      { id: 306, name: 'Gymnopédie No.1',  artist: 'Erik Satie',       duration: '3:07' },
-      { id: 307, name: 'Open Eye Signal',  artist: 'Jon Hopkins',      duration: '8:41' },
-      { id: 308, name: 'An Ending',        artist: 'Brian Eno',        duration: '4:14' },
-    ],
-  },
-  {
-    id: 4, name: 'Late Night', icon: '◈', color: '#c864f0',
-    songs: [
-      { id: 401, name: 'Nights',           artist: 'Frank Ocean',    duration: '5:07' },
-      { id: 402, name: 'After Hours',      artist: 'The Weeknd',     duration: '6:01' },
-      { id: 403, name: 'Ivy',              artist: 'Frank Ocean',    duration: '4:09' },
-      { id: 404, name: 'Midnight City',    artist: 'M83',            duration: '4:03' },
-      { id: 405, name: 'Digital Love',     artist: 'Daft Punk',      duration: '4:58' },
-    ],
-  },
-  {
-    id: 5, name: 'Road Trip', icon: '◇', color: '#f0c832',
-    songs: [
-      { id: 501, name: 'Mr. Brightside',   artist: 'The Killers',    duration: '3:42' },
-      { id: 502, name: 'Take Me Home',     artist: 'John Denver',    duration: '3:13' },
-      { id: 503, name: 'Life is a Highway',artist: 'Tom Cochrane',   duration: '4:33' },
-      { id: 504, name: 'Africa',           artist: 'Toto',           duration: '4:55' },
-      { id: 505, name: 'Don\'t Stop Me',   artist: 'Queen',          duration: '3:29' },
-      { id: 506, name: 'Born to Run',      artist: 'Springsteen',    duration: '4:31' },
-      { id: 507, name: 'Fast Car',         artist: 'Tracy Chapman',  duration: '4:57' },
-      { id: 508, name: 'On the Road Again',artist: 'Willie Nelson',  duration: '2:34' },
-    ],
-  },
-  {
-    id: 6, name: 'Neue Entdeckungen', icon: '⊹', color: '#ff8c55',
-    songs: [
-      { id: 601, name: 'Idol',             artist: 'YOASOBI',        duration: '3:29' },
-      { id: 602, name: 'Glimpse of Us',    artist: 'Joji',           duration: '3:43' },
-      { id: 603, name: 'Escapism',         artist: 'RAYE',           duration: '3:47' },
-    ],
-  },
-]
+const playlistId = route.params.id  // string id from server, or 'favorites'
 
-const playlist = computed(() => allPlaylists.find(p => p.id === id) ?? allPlaylists[0])
+// ── Load data ──────────────────────────────────────────
+const loading = ref(true)
+const playlist = ref(null)
 
-const totalDuration = computed(() => {
-  const songs = playlist.value.songs
-  if (!songs.length) return '0 min'
-  let total = 0
-  songs.forEach(s => {
-    const [m, sec] = s.duration.split(':').map(Number)
-    total += m * 60 + sec
-  })
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  return h > 0 ? `${h} Std. ${m} Min.` : `${m} Min.`
+onMounted(async () => {
+  try {
+    // Load favorites
+    if (player.loadFavorites) await player.loadFavorites()
+
+    if (playlistId === 'favorites') {
+      playlist.value = {
+        id:     'favorites',
+        name:   'Lieblingssongs',
+        icon:   '♡',
+        color:  '#ff5a32',
+        pinned: true,
+        songs:  player.likedSongs ?? [],
+      }
+      loading.value = false
+      return
+    }
+
+    // Load from server directly — don't rely on store cache
+    const res = await fetch(`http://localhost:3001/api/playlists/${playlistId}`)
+    if (res.ok) {
+      playlist.value = await res.json()
+    } else {
+      // Fallback to store
+      if (!plStore.playlists.length) await plStore.load()
+      playlist.value = plStore.playlists.find(p => p.id === playlistId) ?? null
+    }
+  } catch (e) {
+    console.error('PlaylistDetail error:', e)
+    // Try store as fallback
+    if (!plStore.playlists.length) await plStore.load().catch(() => {})
+    playlist.value = plStore.playlists.find(p => p.id === playlistId) ?? null
+  } finally {
+    loading.value = false
+  }
 })
 
-import { ref } from 'vue'
+// ── Computed ───────────────────────────────────────────
+const songs = computed(() => playlist.value?.songs ?? [])
+
+const totalDuration = computed(() => {
+  // songs from server don't have duration field — just show count
+  const count = songs.value.length
+  return count === 0 ? '0 Songs' : `${count} Song${count !== 1 ? 's' : ''}`
+})
+
+// ── Actions ────────────────────────────────────────────
 const currentlyPlaying = ref(null)
 
 function playSong(song) {
+  // Find full song object in player store
+  const fullSong = player.songs.find(s => String(s.id) === String(song.id))
+  if (fullSong) {
+    player.fromRoute = `/playlists/${playlistId}`
+    player.play(fullSong)
+    router.push(`/player?from=playlists/${playlistId}`)
+  }
   currentlyPlaying.value = song.id
-  router.push('/player')
+}
+
+async function removeSong(song) {
+  if (playlistId === 'favorites') {
+    await fetch(`http://localhost:3001/api/favorites/${song.id}`, { method: 'DELETE' })
+    player.likedSongs = player.likedSongs.filter(f => String(f.id) !== String(song.id))
+  } else {
+    await plStore.removeSong(playlistId, String(song.id))
+    playlist.value.songs = playlist.value.songs.filter(s => s.id !== song.id)
+  }
 }
 </script>
 
@@ -377,6 +366,26 @@ function playSong(song) {
 .empty-icon { font-size: 3rem; opacity: 0.4; }
 .empty-title { font-family: 'Bebas Neue', cursive; font-size: 1.4rem; letter-spacing: 0.12em; }
 .empty-sub { font-size: 0.78rem; max-width: 260px; line-height: 1.6; }
+
+.song-remove {
+  background: none; border: none; color: rgba(240,237,230,0.15);
+  cursor: pointer; font-size: 0.7rem; padding: 0.2rem 0.4rem;
+  transition: color 0.2s; flex-shrink: 0; opacity: 0;
+}
+.song-row:hover .song-remove { opacity: 1; }
+.song-remove:hover { color: #ff5a32; }
+
+.loading-state {
+  position: relative; z-index: 1;
+  display: flex; gap: 0.5rem; justify-content: center; padding: 3rem;
+}
+.load-dot {
+  width: 8px; height: 8px; border-radius: 50%; background: #5b6aff;
+  animation: loadBounce 0.7s ease-in-out infinite;
+}
+.load-dot:nth-child(2) { animation-delay: 0.15s; }
+.load-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes loadBounce { 0%, 100% { transform: translateY(0); opacity: 0.4; } 50% { transform: translateY(-8px); opacity: 1; } }
 
 /* ── Keyframes ── */
 @keyframes fadeDown {

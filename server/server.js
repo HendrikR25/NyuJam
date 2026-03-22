@@ -7,8 +7,9 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-const MUSIC_DIR     = path.join(__dirname, 'music')
+const MUSIC_DIR      = path.join(__dirname, 'music')
 const PLAYLISTS_FILE = path.join(__dirname, 'playlists.json')
+const FAVORITES_FILE = path.join(__dirname, 'favorites.json')
 
 // ── Helper: load/save playlists ────────────────────────
 function loadPlaylists() {
@@ -17,6 +18,15 @@ function loadPlaylists() {
 }
 function savePlaylists(data) {
   fs.writeFileSync(PLAYLISTS_FILE, JSON.stringify(data, null, 2))
+}
+
+// ── Helper: load/save favorites ────────────────────────
+function loadFavorites() {
+  if (!fs.existsSync(FAVORITES_FILE)) return []
+  return JSON.parse(fs.readFileSync(FAVORITES_FILE, 'utf-8'))
+}
+function saveFavorites(data) {
+  fs.writeFileSync(FAVORITES_FILE, JSON.stringify(data, null, 2))
 }
 
 // ── Songs ──────────────────────────────────────────────
@@ -147,3 +157,26 @@ app.delete('/api/playlists/:id/songs/:songId', (req, res) => {
 })
 
 app.listen(3001, () => console.log('🎵 NyuJam server running on http://localhost:3001'))
+
+// ── Favorites ──────────────────────────────────────────
+
+app.get('/api/favorites', (req, res) => {
+  res.json(loadFavorites())
+})
+
+app.post('/api/favorites', (req, res) => {
+  const { id, name, artist } = req.body
+  if (!id) return res.status(400).json({ error: 'id required' })
+  const favs = loadFavorites()
+  if (favs.find(f => String(f.id) === String(id)))
+    return res.status(409).json({ error: 'Already in favorites' })
+  favs.push({ id: String(id), name, artist, addedAt: new Date().toISOString() })
+  saveFavorites(favs)
+  res.status(201).json({ ok: true })
+})
+
+app.delete('/api/favorites/:id', (req, res) => {
+  const favs = loadFavorites().filter(f => String(f.id) !== String(req.params.id))
+  saveFavorites(favs)
+  res.json({ ok: true })
+})
