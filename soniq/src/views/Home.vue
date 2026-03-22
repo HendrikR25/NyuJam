@@ -85,6 +85,7 @@ const navItems = [
   { id: 'radio',     icon: '⌇',  label: 'Radio' },
   { id: 'search',    icon: '⊹',  label: 'Suche' },
   { id: 'playlists', icon: '▤',  label: 'Playlists' },
+  { id: 'community', icon: '◎',  label: 'Freunde' },
   { id: 'chats',     icon: '⌲',  label: 'Chats' },
 ]
 
