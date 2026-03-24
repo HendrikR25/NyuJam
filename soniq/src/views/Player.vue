@@ -25,7 +25,8 @@
     <div class="cover-wrap">
       <div class="cover" :class="{ playing: player.isPlaying, loading: player.isLoading }">
         <div class="cover-inner" :style="{ background: coverGradient }">
-          <span v-if="player.isLoading" class="cover-spinner"></span>
+          <img v-if="player.currentSong?.cover && !player.isLoading" :src="player.currentSong.cover" class="cover-img" />
+          <span v-else-if="player.isLoading" class="cover-spinner"></span>
           <span v-else class="cover-icon">{{ songIcon }}</span>
         </div>
         <div class="cover-shadow"></div>
@@ -167,6 +168,10 @@
             <span></span><span></span><span></span>
           </span>
           <span v-else class="sl-idx">{{ idx + 1 }}</span>
+        </div>
+        <div class="sl-cover">
+          <img v-if="song.cover" :src="song.cover" class="sl-cover-img" />
+          <span v-else class="sl-cover-icon">♩</span>
         </div>
         <div class="sl-info">
           <span class="sl-name">{{ song.name }}</span>
@@ -336,7 +341,8 @@ function endScrub() {
 .cover { position: relative; width: min(280px, 72vw); aspect-ratio: 1; border-radius: 8px; }
 .cover.playing { animation: floatPulse 3s ease-in-out infinite; }
 .cover.loading { animation: none; }
-.cover-inner { width: 100%; height: 100%; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 4.5rem; box-shadow: 0 24px 60px rgba(0,0,0,0.6); }
+.cover-inner { width: 100%; height: 100%; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 4.5rem; box-shadow: 0 24px 60px rgba(0,0,0,0.6); overflow: hidden; }
+.cover-img { width: 100%; height: 100%; object-fit: cover; }
 .cover-icon { }
 .cover-spinner { width: 40px; height: 40px; border: 3px solid rgba(240,237,230,0.1); border-top-color: rgba(240,237,230,0.6); border-radius: 50%; animation: spin 0.8s linear infinite; }
 .cover-shadow { position: absolute; bottom: -18px; left: 10%; right: 10%; height: 30px; border-radius: 50%; background: rgba(0,0,0,0.4); filter: blur(14px); z-index: -1; }
@@ -467,6 +473,9 @@ function endScrub() {
 .sl-wave span { display: block; width: 2.5px; border-radius: 2px; background: #32c8a0; animation: waveBar 0.7s ease-in-out infinite; }
 .sl-wave span:nth-child(2) { animation-delay: 0.15s; }
 .sl-wave span:nth-child(3) { animation-delay: 0.3s; height: 8px; }
+.sl-cover { width: 36px; height: 36px; border-radius: 4px; overflow: hidden; flex-shrink: 0; background: rgba(240,237,230,0.05); display: flex; align-items: center; justify-content: center; }
+.sl-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.sl-cover-icon { font-size: 0.9rem; color: rgba(240,237,230,0.2); }
 .sl-info { flex: 1; display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
 .sl-name { font-size: 0.88rem; font-weight: 500; color: #f0ede6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sl-row.active .sl-name { color: #32c8a0; }

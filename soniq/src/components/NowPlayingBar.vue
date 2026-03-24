@@ -5,7 +5,10 @@
       class="now-playing-bar"
       @click="router.push('/player')"
     >
-      <span class="npb-dot" :class="{ paused: !player.isPlaying }"></span>
+      <div class="npb-cover" v-if="player.currentSong?.cover">
+        <img :src="player.currentSong.cover" class="npb-cover-img" />
+      </div>
+      <span class="npb-dot" v-else :class="{ paused: !player.isPlaying }"></span>
       <div class="npb-info">
         <span class="npb-label">{{ player.isPlaying ? 'now playing' : 'pausiert' }}</span>
         <span class="npb-text">{{ player.currentSong.artist }} · {{ player.currentSong.name }}</span>
@@ -60,6 +63,8 @@ const isHidden = computed(() => false)
   box-shadow: 0 12px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(240,237,230,0.1);
 }
 
+.npb-cover { width: 28px; height: 28px; border-radius: 4px; overflow: hidden; flex-shrink: 0; }
+.npb-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .npb-dot {
   width: 7px; height: 7px; flex-shrink: 0;
   border-radius: 50%; background: #ff5a32;

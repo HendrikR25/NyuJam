@@ -45,9 +45,18 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       isLoading.value = true
       error.value     = null
-      const res       = await fetch(`${BASE_URL}/api/songs`)
-      if (!res.ok) throw new Error()
-      songs.value = await res.json()
+
+      // Load both local MP3s and R2-uploaded songs in parallel
+      const [localRes, uploadedRes] = await Promise.all([
+        fetch(`${BASE_URL}/api/songs`),
+        fetch(`${BASE_URL}/api/songs/uploaded`),
+      ])
+
+      const local    = localRes.ok    ? await localRes.json()    : []
+      const uploaded = uploadedRes.ok ? await uploadedRes.json() : []
+
+      // Merge — uploaded songs first, then local
+      songs.value = [...uploaded, ...local]
     } catch {
       error.value = 'Musik-Server nicht erreichbar. Läuft er auf Port 3001?'
     } finally {
