@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
-const BASE_URL = 'http://192.168.178.58:3001'
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 export const useSocialStore = defineStore('social', () => {
   const friends     = ref([])

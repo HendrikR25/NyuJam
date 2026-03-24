@@ -13,6 +13,7 @@ import FriendsRadio from '@/views/Radio/FriendsRadio.vue'
 import Donation from '@/views/Donation/Donation.vue'
 import ArtistProfile from '@/views/Profiles/ArtistProfile.vue'
 import Profile from '@/views/Profiles/Profile.vue'
+import Upload from '@/views/Upload.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -85,7 +86,12 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: Profile,
-    }
+    },
+    {
+      path: '/upload',
+      name: 'upload',
+      component: Upload,
+    },
   ],
 })
 

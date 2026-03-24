@@ -1,3 +1,4 @@
+require('dotenv').config()
 const express = require('express')
 const cors    = require('cors')
 const fs      = require('fs')
@@ -302,8 +303,6 @@ app.patch('/api/auth/profile', (req, res) => {
   res.json({ user: safeUser })
 })
 
-app.listen(3001, '0.0.0.0', () => console.log('🎵 NyuJam server running on http://192.168.178.58:3001'))
-
 // ── Social helpers ─────────────────────────────────────
 const SOCIAL_FILE = path.join(__dirname, 'social.json')
 
@@ -469,3 +468,131 @@ app.get('/api/conversations', (req, res) => {
   })
   res.json({ dms, groups: myGroups })
 })
+
+// ── Cloudflare R2 Upload ───────────────────────────────
+const multer = require('multer')
+const crypto = require('crypto')
+
+// ── R2 Configuration ───────────────────────────────────
+const R2_ACCOUNT_ID    = process.env.R2_ACCOUNT_ID    || 'YOUR_ACCOUNT_ID'
+const R2_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || 'YOUR_ACCESS_KEY_ID'
+const R2_SECRET_KEY    = process.env.R2_SECRET_KEY    || 'YOUR_SECRET_KEY'
+const R2_BUCKET_NAME   = process.env.R2_BUCKET_NAME   || 'YOUR_BUCKET_NAME'
+const R2_PUBLIC_URL    = process.env.R2_PUBLIC_URL     || 'https://YOUR_CUSTOM_DOMAIN_OR_PUBLIC_URL'
+
+console.log('R2 Config:', {
+  account:   R2_ACCOUNT_ID.slice(0, 8) + '...',
+  key:       R2_ACCESS_KEY_ID.slice(0, 8) + '...',
+  bucket:    R2_BUCKET_NAME,
+  publicUrl: R2_PUBLIC_URL,
+})
+
+// ── AWS Signature V4 — no external SDK, no TLS issues ──
+function hmac(key, data)    { return crypto.createHmac('sha256', key).update(data).digest() }
+function hmacHex(key, data) { return crypto.createHmac('sha256', key).update(data).digest('hex') }
+function sha256hex(data)    { return crypto.createHash('sha256').update(data).digest('hex') }
+
+async function uploadToR2(buffer, key, contentType) {
+  const host      = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  const url       = `https://${host}/${R2_BUCKET_NAME}/${key}`
+  const now       = new Date()
+  const date      = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z'
+  const dateOnly  = date.slice(0, 8)
+  const bodyHash  = sha256hex(buffer)
+
+  const hdrs = {
+    'content-length':       String(buffer.length),
+    'content-type':         contentType,
+    'host':                 host,
+    'x-amz-content-sha256': bodyHash,
+    'x-amz-date':           date,
+  }
+
+  const sortedKeys      = Object.keys(hdrs).sort()
+  const canonicalHdrs   = sortedKeys.map(k => `${k}:${hdrs[k]}`).join('\n') + '\n'
+  const signedHdrs      = sortedKeys.join(';')
+  const canonicalReq    = ['PUT', `/${R2_BUCKET_NAME}/${key}`, '', canonicalHdrs, signedHdrs, bodyHash].join('\n')
+  const credScope       = `${dateOnly}/auto/s3/aws4_request`
+  const stringToSign    = ['AWS4-HMAC-SHA256', date, credScope, sha256hex(canonicalReq)].join('\n')
+  const signingKey      = hmac(hmac(hmac(hmac(`AWS4${R2_SECRET_KEY}`, dateOnly), 'auto'), 's3'), 'aws4_request')
+  const signature       = hmacHex(signingKey, stringToSign)
+  const authorization   = `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY_ID}/${credScope}, SignedHeaders=${signedHdrs}, Signature=${signature}`
+
+  const res = await fetch(url, {
+    method:  'PUT',
+    headers: { ...hdrs, authorization },
+    body:    buffer,
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`R2 ${res.status}: ${text}`)
+  }
+  return `${R2_PUBLIC_URL}/${key}`
+}
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } })
+
+const SONGS_META_FILE = path.join(__dirname, 'songs_meta.json')
+function loadSongsMeta() {
+  if (!fs.existsSync(SONGS_META_FILE)) return []
+  return JSON.parse(fs.readFileSync(SONGS_META_FILE, 'utf-8'))
+}
+function saveSongsMeta(data) {
+  fs.writeFileSync(SONGS_META_FILE, JSON.stringify(data, null, 2))
+}
+
+// POST /api/upload — requires multipart form with: mp3, cover, title, artist
+app.post('/api/upload', upload.fields([
+  { name: 'mp3',   maxCount: 1 },
+  { name: 'cover', maxCount: 1 },
+]), async (req, res) => {
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  const mp3File   = req.files?.mp3?.[0]
+  const coverFile = req.files?.cover?.[0]
+  const title     = req.body.title?.trim()
+  const artist    = req.body.artist?.trim() || user.username
+
+  if (!mp3File)  return res.status(400).json({ error: 'MP3-Datei fehlt' })
+  if (!coverFile) return res.status(400).json({ error: 'Cover-Bild fehlt' })
+  if (!title)    return res.status(400).json({ error: 'Titel fehlt' })
+
+  try {
+    const id        = Date.now().toString()
+    const mp3Key    = `music/${id}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+    const coverKey  = `covers/${id}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+
+    const [mp3Url, coverUrl] = await Promise.all([
+      uploadToR2(mp3File.buffer,   mp3Key,   'audio/mpeg'),
+      uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype),
+    ])
+
+    const meta = loadSongsMeta()
+    const song = { id, title, artist, mp3Url, coverUrl, uploadedBy: user.id, createdAt: new Date().toISOString() }
+    meta.push(song)
+    saveSongsMeta(meta)
+
+    res.status(201).json(song)
+  } catch (err) {
+    console.error('R2 upload error:', err.message, err.Code, err.$metadata)
+    res.status(500).json({ error: `Upload fehlgeschlagen: ${err.message}` })
+  }
+})
+
+// GET /api/songs/uploaded — all uploaded songs (for search/player)
+app.get('/api/songs/uploaded', (req, res) => {
+  const meta  = loadSongsMeta()
+  const songs = meta.map((s, i) => ({
+    id:     `u_${s.id}`,
+    artist: s.artist,
+    name:   s.title,
+    cover:  s.coverUrl,
+    url:    s.mp3Url,
+    file:   null,
+  }))
+  res.json(songs)
+})
+
+app.listen(3001, '0.0.0.0', () => console.log('🎵 NyuJam server running on port 3001'))

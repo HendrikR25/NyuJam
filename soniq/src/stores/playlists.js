@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 
-const BASE_URL = 'http://192.168.178.58:3001'
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 export const usePlaylistsStore = defineStore('playlists', () => {
   const playlists = ref([])
