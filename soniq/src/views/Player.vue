@@ -142,6 +142,15 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
               <span>Zum Künstler</span>
             </button>
+
+            <!-- Delete song (own songs or admin) -->
+            <template v-if="canDeleteSong">
+              <div class="menu-divider"></div>
+              <button class="menu-item menu-item--danger" @click="deleteSong">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                <span>Song löschen</span>
+              </button>
+            </template>
           </div>
         </transition>
       </div>
@@ -194,11 +203,13 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'
+import { useAuthStore } from '@/stores/auth'
 
 const router         = useRouter()
 const route          = useRoute()
 const player         = usePlayerStore()
 const playlistsStore = usePlaylistsStore()
+const auth           = useAuthStore()
 
 onMounted(() => {
   if (!player.songs.length)           player.loadSongs()
@@ -241,6 +252,29 @@ function goToArtist() {
   if (!player.currentSong) return
   menuOpen.value = false
   router.push(`/artist/${encodeURIComponent(player.currentSong.artist)}`)
+}
+
+// Only show delete for R2-uploaded songs (id starts with u_) where user is artist or admin
+const canDeleteSong = computed(() => {
+  if (!auth.isLoggedIn || !player.currentSong) return false
+  const song = player.currentSong
+  if (!String(song.id).startsWith('u_')) return false  // local MP3s can't be deleted
+  const isAdmin  = auth.user?.isAdmin === true
+  const isArtist = auth.user?.username?.toLowerCase() === song.artist?.toLowerCase()
+  return isAdmin || isArtist
+})
+
+async function deleteSong() {
+  if (!player.currentSong) return
+  if (!confirm(`„${player.currentSong.name}" wirklich löschen?`)) return
+  menuOpen.value = false
+  try {
+    await player.deleteSong(player.currentSong.id)
+    showFeedback('✓ Song gelöscht')
+    player.next()
+  } catch (e) {
+    showFeedback(`⚠ ${e.message}`)
+  }
 }
 
 async function addToPlaylist(pl) {
@@ -417,6 +451,8 @@ function endScrub() {
 .menu-item:hover { background: rgba(240,237,230,0.06); color: #f0ede6; }
 .menu-item--disabled { opacity: 0.4; cursor: default; }
 .menu-item--disabled:hover { background: none; color: rgba(240,237,230,0.7); }
+.menu-item--danger { color: rgba(255,90,50,0.7) !important; }
+.menu-item--danger:hover { background: rgba(255,90,50,0.08) !important; color: #ff5a32 !important; }
 .menu-arrow { margin-left: auto; font-size: 1rem; color: rgba(240,237,230,0.3); transition: transform 0.2s; }
 .menu-arrow.open { transform: rotate(90deg); }
 .menu-soon { margin-left: auto; font-size: 0.58rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,237,230,0.25); background: rgba(240,237,230,0.06); border-radius: 3px; padding: 0.1rem 0.38rem; }

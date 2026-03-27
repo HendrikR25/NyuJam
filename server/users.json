@@ -1,5 +1,17 @@
 [
   {
+    "id": "admin",
+    "username": "admin",
+    "email": "admin@nyujam.local",
+    "password": "admin1234",
+    "bio": "NyuJam Administrator",
+    "isPublic": false,
+    "isAdmin": true,
+    "avatar": null,
+    "createdAt": "2026-03-25T13:08:36.570Z",
+    "token": "YWRtaW46MTc3NDQ0NDE1NDI4MA=="
+  },
+  {
     "id": "1774215641589",
     "username": "Hendrik",
     "email": "test@gmail.com",

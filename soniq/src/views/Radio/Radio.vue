@@ -136,30 +136,43 @@
     <transition name="np-swap" mode="out-in">
       <div class="now-playing-card" :key="currentStation.id" :style="{ '--accent': currentStation.color }">
         <div class="npc-cover" :style="{ background: currentStation.color + '22', borderColor: currentStation.color + '44' }">
-          <span class="npc-icon">{{ currentStation.icon }}</span>
-          <span class="npc-wave"><span></span><span></span><span></span><span></span></span>
+          <img v-if="currentRadioSong?.cover" :src="currentRadioSong.cover" class="npc-cover-img" />
+          <span v-else class="npc-icon">{{ currentStation.icon }}</span>
+          <span class="npc-wave" v-if="radioPlaying && player.isPlaying"><span></span><span></span><span></span><span></span></span>
         </div>
         <div class="npc-info">
           <span class="npc-station">{{ currentStation.station }}</span>
-          <span class="npc-song">{{ currentStation.song }}</span>
-          <span class="npc-artist">{{ currentStation.artist }}</span>
+          <span class="npc-song">{{ currentRadioSong?.name || currentStation.song }}</span>
+          <span class="npc-artist">{{ currentRadioSong?.artist || currentStation.artist }}</span>
         </div>
-        <button class="npc-play" @click="$router.push('/player')">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        </button>
+        <div class="npc-controls">
+          <button class="npc-play" @click="playRadioSong(currentRadioSong)" :disabled="!currentRadioSong" title="Abspielen">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <button class="npc-next" @click="radioNext" :disabled="radioSongs.length < 2" title="Nächster Song">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+          </button>
+        </div>
+        <div class="npc-empty" v-if="!radioSongs.length">
+          <span>Keine Songs — lade Songs über Upload hoch</span>
+        </div>
       </div>
     </transition>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
 import * as topojson from 'topojson-client'
 import NavBar from '@/components/NavBar.vue'
+import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
+const player = usePlayerStore()
+
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 const W = 960
 const H = 500
@@ -190,8 +203,45 @@ const continentMap = {
 function getContinentId(c) { return continentMap[c] ?? 'unknown' }
 
 const globalStation = {
-  id: 'global', station: 'NyuJam Global', song: 'Kiara', artist: 'Bonobo', icon: '🌐', color: '#5b9fff',
+  id: 'global', station: 'NyuJam Global', song: 'Lädt...', artist: '—', icon: '🌐', color: '#5b9fff',
 }
+
+// ── R2 Radio songs ─────────────────────────────────────
+const radioSongs   = ref([])
+const radioIdx     = ref(0)
+const radioPlaying = ref(false)
+let   radioInterval = null
+
+async function loadRadioSongs(continent = null, country = null) {
+  try {
+    const params = new URLSearchParams()
+    if (continent) params.set('continent', continent)
+    if (country)   params.set('country', country)
+    const url = `${BASE_URL}/api/songs/radio${params.toString() ? '?' + params : ''}`
+    const res = await fetch(url)
+    radioSongs.value = await res.json()
+    radioIdx.value   = 0
+    if (radioSongs.value.length) {
+      globalStation.song   = radioSongs.value[0].name
+      globalStation.artist = radioSongs.value[0].artist
+      globalStation.cover  = radioSongs.value[0].cover
+    }
+  } catch { /* offline */ }
+}
+
+function playRadioSong(song) {
+  if (!song) return
+  player.play(song)
+  radioPlaying.value = true
+}
+
+function radioNext() {
+  if (!radioSongs.value.length) return
+  radioIdx.value = (radioIdx.value + 1) % radioSongs.value.length
+  playRadioSong(radioSongs.value[radioIdx.value])
+}
+
+const currentRadioSong = computed(() => radioSongs.value[radioIdx.value] || null)
 
 // ── State ──────────────────────────────────────────────
 const loading     = ref(true)
@@ -260,6 +310,7 @@ function zoomToCountry(iso) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
+  await loadRadioSongs()
   try {
     const res  = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
     const world = await res.json()
@@ -268,7 +319,7 @@ onMounted(async () => {
     const nameRes  = await fetch('https://raw.githubusercontent.com/lukes/ISO-3166-Countries-with-Regional-Codes/master/all/all.json')
     const nameData = await nameRes.json()
     const nameById = {}
-    nameData.forEach(c => { nameById[c['country-code']] = { name: c.name, region: c.region, subregion: c['sub-region'] } })
+    nameData.forEach(c => { nameById[c['country-code']] = { name: c.name, region: c.region, subregion: c['sub-region'], alpha2: c['alpha-2'] } })
 
     const projection = d3.geoNaturalEarth1()
       .scale(153)
@@ -301,7 +352,8 @@ onMounted(async () => {
 
       return {
         id:        f.id,
-        iso:       id,
+        iso:       id,          // numeric 3-digit
+        alpha2:    info.alpha2 || null,  // 2-letter code e.g. 'DE'
         name:      nameRaw || `Country ${id}`,
         continent,
         pathD:     path(f) ?? '',
@@ -357,10 +409,12 @@ function onFeatureClick(f) {
     activeContinent.value = cont
     activeCountry.value   = null
     zoomToContinent(cid)
+    loadRadioSongs(cont.id)
   } else if (activeContinent.value.id === cid) {
     // Continent → Country
     activeCountry.value = {
       iso:      f.iso,
+      alpha2:   f.alpha2,
       name:     f.name,
       centroid: f.centroid,
       id:       f.iso,
@@ -371,6 +425,7 @@ function onFeatureClick(f) {
       color:    cont.color,
     }
     zoomToCountry(f.iso)
+    loadRadioSongs(cont.id, f.alpha2 || f.iso)
   }
 }
 
@@ -378,10 +433,14 @@ function drillToWorld() {
   activeContinent.value = null
   activeCountry.value   = null
   zoomToWorld()
+  loadRadioSongs()  // global — all songs
 }
 function drillToContinent() {
   activeCountry.value = null
-  if (activeContinent.value) zoomToContinent(activeContinent.value.id)
+  if (activeContinent.value) {
+    zoomToContinent(activeContinent.value.id)
+    loadRadioSongs(activeContinent.value.id)
+  }
 }
 function goBack() {
   if (activeCountry.value)   { drillToContinent(); return }
@@ -593,6 +652,7 @@ const glowStyle = computed(() => ({
   display: flex; align-items: center; justify-content: center;
   position: relative; overflow: hidden;
 }
+.npc-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .npc-icon { font-size: 1.4rem; }
 .npc-wave {
   position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
@@ -621,14 +681,31 @@ const glowStyle = computed(() => ({
 }
 .npc-artist { font-size: 0.7rem; color: rgba(240,237,230,0.4); }
 
+.npc-controls { display: flex; flex-direction: column; gap: 0.35rem; flex-shrink: 0; }
 .npc-play {
   flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
   background: var(--accent); border: none; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   color: #060c12; box-shadow: 0 0 14px var(--accent);
-  transition: transform 0.15s, box-shadow 0.2s;
+  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
 }
-.npc-play:hover { transform: scale(1.1); box-shadow: 0 0 22px var(--accent); }
+.npc-play:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 22px var(--accent); }
+.npc-play:disabled { opacity: 0.3; cursor: default; }
+.npc-next {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(240,237,230,0.06); border: 1px solid rgba(240,237,230,0.1);
+  color: rgba(240,237,230,0.35); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.2s, background 0.2s;
+}
+.npc-next:hover:not(:disabled) { color: #f0ede6; background: rgba(240,237,230,0.1); }
+.npc-next:disabled { opacity: 0.3; cursor: default; }
+.npc-empty {
+  position: absolute; inset: 0; background: rgba(10,10,15,0.88);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.7rem; color: rgba(240,237,230,0.3); border-radius: inherit;
+  text-align: center; padding: 0.5rem;
+}
 
 /* ── Transitions ── */
 .bc-fade-enter-active, .bc-fade-leave-active { transition: opacity 0.2s, transform 0.2s; }

@@ -167,6 +167,19 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  async function deleteSong(songId) {
+    const token = localStorage.getItem('nyujam_token') || ''
+    const res   = await fetch(`${BASE_URL}/api/songs/${songId}`, {
+      method:  'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    // Remove from local list
+    songs.value = songs.value.filter(s => String(s.id) !== String(songId))
+    return data
+  }
+
   return {
     // state
     songs, currentSong, isPlaying, currentTime, duration,
@@ -175,6 +188,6 @@ export const usePlayerStore = defineStore('player', () => {
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
     loadSongs, loadFavorites, play, togglePlay,
-    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime,
+    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong,
   }
 })

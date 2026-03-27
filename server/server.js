@@ -232,11 +232,37 @@ function getUserFromToken(req) {
   return users.find(u => u.token === tok) ?? null
 }
 
+// ── Admin init — creates admin user if not exists ──────
+function initAdmin() {
+  const users = loadUsers()
+  if (users.find(u => u.isAdmin)) return
+  const admin = {
+    id:        'admin',
+    username:  'admin',
+    email:     'admin@nyujam.local',
+    password:  'admin1234',  // ← CHANGE THIS
+    bio:       'NyuJam Administrator',
+    isPublic:  false,
+    isAdmin:   true,
+    avatar:    null,
+    createdAt: new Date().toISOString(),
+    token:     simpleToken('admin'),
+  }
+  users.unshift(admin)
+  saveUsers(users)
+  console.log('👑 Admin user created — username: admin, password: admin1234')
+  console.log('   ⚠  Change the password in users.json!')
+}
+initAdmin()
+
 // Register
 app.post('/api/auth/register', (req, res) => {
   const { username, email, password } = req.body
   if (!username?.trim() || !email?.trim() || !password)
     return res.status(400).json({ error: 'Alle Felder sind erforderlich.' })
+
+  if (username.trim().toLowerCase() === 'admin')
+    return res.status(400).json({ error: 'Benutzername nicht erlaubt.' })
 
   const users = loadUsers()
   if (users.find(u => u.username.toLowerCase() === username.toLowerCase()))
@@ -248,9 +274,10 @@ app.post('/api/auth/register', (req, res) => {
     id:        Date.now().toString(),
     username:  username.trim(),
     email:     email.trim().toLowerCase(),
-    password,  // plain text for prototype — use bcrypt in production
+    password,
     bio:       '',
     isPublic:  true,
+    isAdmin:   false,
     avatar:    null,
     createdAt: new Date().toISOString(),
     token:     '',
@@ -542,7 +569,7 @@ function saveSongsMeta(data) {
   fs.writeFileSync(SONGS_META_FILE, JSON.stringify(data, null, 2))
 }
 
-// POST /api/upload — requires multipart form with: mp3, cover, title, artist
+// POST /api/upload — mp3 required, cover optional, country required, city optional
 app.post('/api/upload', upload.fields([
   { name: 'mp3',   maxCount: 1 },
   { name: 'cover', maxCount: 1 },
@@ -554,23 +581,32 @@ app.post('/api/upload', upload.fields([
   const coverFile = req.files?.cover?.[0]
   const title     = req.body.title?.trim()
   const artist    = req.body.artist?.trim() || user.username
+  const country   = req.body.country?.trim()
+  const city      = req.body.city?.trim() || null
+  const continent = req.body.continent?.trim() || null  // sent from frontend
 
-  if (!mp3File)  return res.status(400).json({ error: 'MP3-Datei fehlt' })
-  if (!coverFile) return res.status(400).json({ error: 'Cover-Bild fehlt' })
-  if (!title)    return res.status(400).json({ error: 'Titel fehlt' })
+  if (!mp3File) return res.status(400).json({ error: 'MP3-Datei fehlt' })
+  if (!title)   return res.status(400).json({ error: 'Titel fehlt' })
+  if (!country) return res.status(400).json({ error: 'Land fehlt' })
 
   try {
-    const id        = Date.now().toString()
-    const mp3Key    = `music/${id}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
-    const coverKey  = `covers/${id}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+    const id     = Date.now().toString()
+    const mp3Key = `music/${id}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
 
-    const [mp3Url, coverUrl] = await Promise.all([
-      uploadToR2(mp3File.buffer,   mp3Key,   'audio/mpeg'),
-      uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype),
-    ])
+    let coverUrl = null
+    if (coverFile) {
+      const coverKey = `covers/${id}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+      coverUrl = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
+    }
+
+    const mp3Url = await uploadToR2(mp3File.buffer, mp3Key, 'audio/mpeg')
 
     const meta = loadSongsMeta()
-    const song = { id, title, artist, mp3Url, coverUrl, uploadedBy: user.id, createdAt: new Date().toISOString() }
+    const song = {
+      id, title, artist, mp3Url, coverUrl,
+      country, city, continent,
+      uploadedBy: user.id, createdAt: new Date().toISOString(),
+    }
     meta.push(song)
     saveSongsMeta(meta)
 
@@ -581,18 +617,301 @@ app.post('/api/upload', upload.fields([
   }
 })
 
-// GET /api/songs/uploaded — all uploaded songs (for search/player)
-app.get('/api/songs/uploaded', (req, res) => {
+// DELETE /api/songs/:id — delete song (own songs or admin)
+app.delete('/api/songs/:id', async (req, res) => {
+  const user = getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  const rawId = req.params.id.replace(/^u_/, '')  // strip u_ prefix
   const meta  = loadSongsMeta()
-  const songs = meta.map((s, i) => ({
-    id:     `u_${s.id}`,
-    artist: s.artist,
-    name:   s.title,
-    cover:  s.coverUrl,
-    url:    s.mp3Url,
-    file:   null,
+  const idx   = meta.findIndex(s => s.id === rawId)
+
+  if (idx === -1) return res.status(404).json({ error: 'Song nicht gefunden' })
+
+  const song = meta[idx]
+
+  // Permission check: must be admin OR username matches artist
+  const isAdmin  = user.isAdmin === true
+  const isArtist = user.username.toLowerCase() === song.artist.toLowerCase()
+
+  if (!isAdmin && !isArtist)
+    return res.status(403).json({ error: 'Keine Berechtigung. Dein Benutzername muss mit dem Künstlernamen übereinstimmen.' })
+
+  // Remove from metadata
+  meta.splice(idx, 1)
+  saveSongsMeta(meta)
+
+  res.json({ ok: true, deleted: song.title })
+})
+
+// GET /api/songs/uploaded — all uploaded songs
+app.get('/api/songs/uploaded', (req, res) => {
+  const songs = loadSongsMeta().map(s => ({
+    id: `u_${s.id}`, artist: s.artist, name: s.title,
+    cover: s.coverUrl, url: s.mp3Url, file: null,
+    country: s.country || null, city: s.city || null, continent: s.continent || null,
   }))
   res.json(songs)
+})
+
+// GET /api/songs/all — local + R2 merged
+app.get('/api/songs/all', (req, res) => {
+  const host  = req.headers.host ?? 'localhost:3001'
+  const proto = req.headers['x-forwarded-proto'] ?? 'http'
+  const files = fs.existsSync(MUSIC_DIR) ? fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith('.mp3')) : []
+  const local = files.map((file, i) => {
+    const name = file.replace('.mp3', ''), parts = name.split(' - ')
+    return { id: `l_${i+1}`, artist: parts[0]?.trim() ?? 'Unbekannt', name: parts[1]?.trim() ?? name,
+      cover: null, url: `${proto}://${host}/music/${encodeURIComponent(file)}`,
+      country: null, city: null, continent: null }
+  })
+  const uploaded = loadSongsMeta().map(s => ({
+    id: `u_${s.id}`, artist: s.artist, name: s.title, cover: s.coverUrl, url: s.mp3Url,
+    country: s.country || null, city: s.city || null, continent: s.continent || null,
+  }))
+  res.json([...uploaded, ...local])
+})
+
+// GET /api/songs/radio?continent=europe&country=DE
+// global (no location) always shown; continent/country filter applied
+app.get('/api/songs/radio', (req, res) => {
+  const { continent, country } = req.query
+  const host  = req.headers.host ?? 'localhost:3001'
+  const proto = req.headers['x-forwarded-proto'] ?? 'http'
+  const files = fs.existsSync(MUSIC_DIR) ? fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith('.mp3')) : []
+  const local = files.map((file, i) => {
+    const name = file.replace('.mp3', ''), parts = name.split(' - ')
+    return { id: `l_${i+1}`, artist: parts[0]?.trim() ?? 'Unbekannt', name: parts[1]?.trim() ?? name,
+      cover: null, url: `${proto}://${host}/music/${encodeURIComponent(file)}`,
+      country: null, city: null, continent: null }
+  })
+  const uploaded = loadSongsMeta().map(s => ({
+    id: `u_${s.id}`, artist: s.artist, name: s.title, cover: s.coverUrl, url: s.mp3Url,
+    country: s.country || null, city: s.city || null, continent: s.continent || null,
+  }))
+  const all = [...uploaded, ...local]
+  if (!continent && !country) return res.json(all)
+  // Country → Continent lookup (matches UploadView countryGroups)
+  const countryToContinent = {
+    DE:'europe',AT:'europe',CH:'europe',FR:'europe',GB:'europe',IT:'europe',ES:'europe',
+    NL:'europe',BE:'europe',PL:'europe',SE:'europe',NO:'europe',DK:'europe',FI:'europe',
+    PT:'europe',GR:'europe',RU:'europe',UA:'europe',TR:'europe',
+    US:'namerica',CA:'namerica',MX:'namerica',
+    BR:'samerica',AR:'samerica',CO:'samerica',CL:'samerica',
+    JP:'asia',KR:'asia',CN:'asia',IN:'asia',TH:'asia',ID:'asia',SG:'asia',PH:'asia',
+    NG:'africa',ZA:'africa',GH:'africa',KE:'africa',EG:'africa',
+    AU:'oceania',NZ:'oceania',
+  }
+
+  const filtered = all.filter(s => {
+    // Derive continent from country if not set
+    const sCont = s.continent || (s.country ? countryToContinent[s.country.toUpperCase()] : null)
+
+    // Songs ohne Standort → überall (global)
+    if (!s.country && !sCont) return true
+
+    if (country && continent) {
+      // Länderebene: global + Kontinent ohne Land + exaktes Land
+      if (!s.country && !sCont) return true
+      if (!s.country && sCont === continent.toLowerCase()) return true
+      if (s.country?.toUpperCase() === country.toUpperCase()) return true
+      return false
+    }
+
+    if (continent && !country) {
+      // Kontinentebene: global + alle Songs dieses Kontinents (mit oder ohne Land)
+      if (!s.country && !sCont) return true
+      if (sCont === continent.toLowerCase()) return true
+      return false
+    }
+
+    return false
+  })
+  res.json(filtered)
+})
+
+// ── Radio Sessions ─────────────────────────────────────
+const RADIO_FILE = path.join(__dirname, 'radio_sessions.json')
+
+function loadRadio() {
+  if (!fs.existsSync(RADIO_FILE)) return []
+  return JSON.parse(fs.readFileSync(RADIO_FILE, 'utf-8'))
+}
+function saveRadio(data) {
+  fs.writeFileSync(RADIO_FILE, JSON.stringify(data, null, 2))
+}
+function cleanSessions() {
+  // Remove sessions inactive for >2h
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000
+  const sessions = loadRadio().filter(s => new Date(s.updatedAt).getTime() > cutoff)
+  saveRadio(sessions)
+  return sessions
+}
+
+// GET all active friend radio sessions
+app.get('/api/radio/sessions', (req, res) => {
+  const me = getUserFromToken(req)
+  res.json(cleanSessions().filter(s => s.isPublic || s.hostId === me?.id))
+})
+
+// POST create radio session
+app.post('/api/radio/sessions', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  // Get all available songs for the session queue
+  const allSongs = (() => {
+    const host  = req.headers.host ?? 'localhost:3001'
+    const proto = req.headers['x-forwarded-proto'] ?? 'http'
+    const files = fs.existsSync(MUSIC_DIR)
+      ? fs.readdirSync(MUSIC_DIR).filter(f => f.endsWith('.mp3'))
+      : []
+    const local = files.map((file, i) => ({
+      id: `l_${i + 1}`,
+      artist: file.replace('.mp3','').split(' - ')[0]?.trim() ?? 'Unbekannt',
+      name:   file.replace('.mp3','').split(' - ')[1]?.trim() ?? file,
+      cover:  null,
+      url:    `${proto}://${host}/music/${encodeURIComponent(file)}`,
+    }))
+    const uploaded = loadSongsMeta().map(s => ({
+      id: `u_${s.id}`, artist: s.artist, name: s.title, cover: s.coverUrl, url: s.mp3Url,
+    }))
+    return [...uploaded, ...local]
+  })()
+
+  // Shuffle queue
+  const queue = [...allSongs].sort(() => Math.random() - 0.5)
+
+  const sessions = loadRadio()
+  const existing = sessions.find(s => s.hostId === me.id)
+  if (existing) {
+    existing.updatedAt = new Date().toISOString()
+    saveRadio(sessions)
+    return res.json(existing)
+  }
+
+  const session = {
+    id:           Date.now().toString(),
+    hostId:       me.id,
+    hostName:     me.username,
+    hostAvatar:   me.avatar || null,
+    isPublic:     req.body.isPublic !== false,
+    currentSong:  queue[0] || null,
+    queue:        queue.slice(1, 20),
+    listeners:    [me.id],
+    votes:        [],
+    chatMessages: [],
+    startedAt:    new Date().toISOString(),
+    updatedAt:    new Date().toISOString(),
+  }
+  sessions.push(session)
+  saveRadio(sessions)
+  res.status(201).json(session)
+})
+
+// GET single session
+app.get('/api/radio/sessions/:id', (req, res) => {
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s) return res.status(404).json({ error: 'Session nicht gefunden' })
+  res.json(s)
+})
+
+// POST join session
+app.post('/api/radio/sessions/:id/join', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (!s.listeners.includes(me.id)) s.listeners.push(me.id)
+  s.updatedAt = new Date().toISOString()
+  saveRadio(sessions)
+  res.json(s)
+})
+
+// POST leave session
+app.post('/api/radio/sessions/:id/leave', (req, res) => {
+  const me = getUserFromToken(req)
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s) return res.json({ ok: true })
+  s.listeners = s.listeners.filter(id => id !== me?.id)
+  if (s.listeners.length === 0 || s.hostId === me?.id) {
+    saveRadio(sessions.filter(x => x.id !== s.id))
+  } else {
+    s.updatedAt = new Date().toISOString()
+    saveRadio(sessions)
+  }
+  res.json({ ok: true })
+})
+
+// POST vote skip
+app.post('/api/radio/sessions/:id/vote', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+
+  if (!s.votes.includes(me.id)) s.votes.push(me.id)
+  const needed = Math.ceil(s.listeners.length / 2)
+  let skipped = false
+
+  if (s.votes.length >= needed) {
+    // Skip to next song
+    if (s.queue.length > 0) {
+      s.currentSong = s.queue.shift()
+    }
+    s.votes = []
+    skipped = true
+    s.chatMessages.push({
+      id: Date.now().toString(), system: true,
+      text: `⏭ Song übersprungen (${needed}/${s.listeners.length} Stimmen)`,
+      createdAt: new Date().toISOString(),
+    })
+  }
+
+  s.updatedAt = new Date().toISOString()
+  saveRadio(sessions)
+  res.json({ ...s, skipped })
+})
+
+// POST send chat message in session
+app.post('/api/radio/sessions/:id/chat', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+
+  const msg = {
+    id:        Date.now().toString(),
+    fromId:    me.id,
+    fromName:  me.username,
+    fromAvatar: me.avatar || null,
+    text:      req.body.text?.slice(0, 500) || '',
+    createdAt: new Date().toISOString(),
+  }
+  s.chatMessages.push(msg)
+  if (s.chatMessages.length > 100) s.chatMessages = s.chatMessages.slice(-100)
+  s.updatedAt = new Date().toISOString()
+  saveRadio(sessions)
+  res.json(msg)
+})
+
+// POST next song (host only)
+app.post('/api/radio/sessions/:id/next', (req, res) => {
+  const me = getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const sessions = loadRadio()
+  const s = sessions.find(s => s.id === req.params.id)
+  if (!s || s.hostId !== me.id) return res.status(403).json({ error: 'Nur der Host kann skippen' })
+  if (s.queue.length > 0) s.currentSong = s.queue.shift()
+  s.votes = []
+  s.updatedAt = new Date().toISOString()
+  saveRadio(sessions)
+  res.json(s)
 })
 
 app.listen(3001, '0.0.0.0', () => console.log('🎵 NyuJam server running on port 3001'))
