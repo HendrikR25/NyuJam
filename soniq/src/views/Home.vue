@@ -67,16 +67,6 @@
       @cancel="onWheelCancel"
     />
 
-    <footer class="footer">
-      <button class="now-playing" v-if="player.currentSong" @click="router.push('/player')">
-        <span class="np-dot" :class="{ paused: !player.isPlaying }"></span>
-        <div class="np-info">
-          <span class="np-label">{{ player.isPlaying ? 'now playing' : 'pausiert' }}</span>
-          <span class="np-text">{{ player.currentSong.artist }} · {{ player.currentSong.name }}</span>
-        </div>
-        <span class="np-arrow">▶</span>
-      </button>
-    </footer>
   </div>
 </template>
 
@@ -401,64 +391,6 @@ function navigate(id) {
 }
 
 /* ── Footer ── */
-.footer {
-  position: relative; z-index: 1;
-  margin-top: 3rem;
-  animation: fadeUp 0.6s 0.5s ease both;
-}
-.now-playing {
-  display: flex; align-items: center; gap: 0.75rem;
-  background: rgba(240,237,230,0.04);
-  border: 1px solid rgba(240,237,230,0.1);
-  border-radius: 99px;
-  padding: 0.55rem 1.1rem 0.55rem 0.85rem;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  color: #f0ede6;
-  transition: background 0.2s, border-color 0.2s, transform 0.15s;
-}
-.now-playing:hover {
-  background: rgba(255,90,50,0.08);
-  border-color: rgba(255,90,50,0.3);
-  transform: translateY(-1px);
-}
-.now-playing:active { transform: scale(0.97); }
-
-.np-dot {
-  width: 7px; height: 7px; flex-shrink: 0;
-  border-radius: 50%;
-  background: #ff5a32;
-  animation: pulse 1.6s ease infinite;
-}
-.np-dot.paused {
-  background: rgba(240,237,230,0.3);
-  animation: none;
-}
-.np-info {
-  display: flex; flex-direction: column; gap: 0.05rem; text-align: left;
-}
-.np-label {
-  font-size: 0.58rem; letter-spacing: 0.15em;
-  text-transform: uppercase; color: rgba(240,237,230,0.3);
-  line-height: 1;
-}
-.np-text {
-  font-size: 0.8rem; font-weight: 500;
-  color: rgba(240,237,230,0.75);
-  letter-spacing: 0.03em;
-  line-height: 1.2;
-}
-.np-arrow {
-  font-size: 0.55rem;
-  color: rgba(240,237,230,0.25);
-  margin-left: 0.2rem;
-  transition: color 0.2s, transform 0.2s;
-}
-.now-playing:hover .np-arrow {
-  color: #ff5a32;
-  transform: translateX(2px);
-}
-
 /* ── Keyframes ── */
 @keyframes fadeDown {
   from { opacity: 0; transform: translateY(-10px); }

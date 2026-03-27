@@ -12,7 +12,7 @@
     </div>
 
     <!-- Back -->
-    <button class="back-btn" @click="router.back()">← Zurück</button>
+    <NavBar back-label="← Suche" back-to="/search" />
 
     <!-- Hero -->
     <div class="hero">
@@ -117,6 +117,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore } from '@/stores/player'
 
 const router = useRouter()
@@ -223,7 +224,7 @@ function formatStreams(n) {
 function playSong(song) {
   const full = player.songs.find(s => s.id === song.id)
   if (full) {
-    player.fromRoute = `/artist/${artistName}`
+    player.fromRoute = `/artist/${encodeURIComponent(artistName)}`
     player.play(full)
     router.push(`/player?from=artist/${encodeURIComponent(artistName)}`)
   }

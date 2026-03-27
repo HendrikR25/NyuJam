@@ -12,7 +12,7 @@
     <!-- Dismiss -->
     <button class="dismiss-btn" @click="goBack" aria-label="Schließen">
       <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="18 15 12 9 6 15"/>
+        <polyline points="6 9 12 15 18 9"/>
       </svg>
     </button>
 
@@ -212,16 +212,17 @@ const playlistsStore = usePlaylistsStore()
 const auth           = useAuthStore()
 
 onMounted(() => {
-  if (!player.songs.length)           player.loadSongs()
-  if (!player.likedSongs.length)      player.loadFavorites()
+  if (!player.songs.length)             player.loadSongs()
+  if (!player.likedSongs.length)        player.loadFavorites()
   if (!playlistsStore.playlists.length) playlistsStore.load()
-  if (route.query.from) player.fromRoute = `/${route.query.from}`
+  // Always update fromRoute based on current navigation context
+  player.fromRoute = route.query.from ? `/${route.query.from}` : '/'
   document.addEventListener('click', onClickOutside)
 })
 onUnmounted(() => document.removeEventListener('click', onClickOutside))
 
 function goBack() {
-  router.push(player.fromRoute || '/')
+  router.replace(player.fromRoute || '/')
 }
 
 // ── Three-dots menu ────────────────────────────────

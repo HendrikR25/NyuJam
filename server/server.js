@@ -617,25 +617,72 @@ app.post('/api/upload', upload.fields([
   }
 })
 
+async function deleteFromR2(key) {
+  const host      = `${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+  const url       = `https://${host}/${R2_BUCKET_NAME}/${key}`
+  const now       = new Date()
+  const date      = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z'
+  const dateOnly  = date.slice(0, 8)
+  const bodyHash  = sha256hex('')  // empty body for DELETE
+
+  const hdrs = {
+    'host':                 host,
+    'x-amz-content-sha256': bodyHash,
+    'x-amz-date':           date,
+  }
+
+  const sortedKeys    = Object.keys(hdrs).sort()
+  const canonicalHdrs = sortedKeys.map(k => `${k}:${hdrs[k]}`).join('\n') + '\n'
+  const signedHdrs    = sortedKeys.join(';')
+  const canonicalReq  = ['DELETE', `/${R2_BUCKET_NAME}/${key}`, '', canonicalHdrs, signedHdrs, bodyHash].join('\n')
+  const credScope     = `${dateOnly}/auto/s3/aws4_request`
+  const stringToSign  = ['AWS4-HMAC-SHA256', date, credScope, sha256hex(canonicalReq)].join('\n')
+  const signingKey    = hmac(hmac(hmac(hmac(`AWS4${R2_SECRET_KEY}`, dateOnly), 'auto'), 's3'), 'aws4_request')
+  const signature     = hmacHex(signingKey, stringToSign)
+  const authorization = `AWS4-HMAC-SHA256 Credential=${R2_ACCESS_KEY_ID}/${credScope}, SignedHeaders=${signedHdrs}, Signature=${signature}`
+
+  const res = await fetch(url, {
+    method:  'DELETE',
+    headers: { ...hdrs, authorization },
+  })
+
+  if (!res.ok && res.status !== 404) {
+    const text = await res.text()
+    throw new Error(`R2 DELETE error ${res.status}: ${text}`)
+  }
+}
+
 // DELETE /api/songs/:id — delete song (own songs or admin)
 app.delete('/api/songs/:id', async (req, res) => {
   const user = getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
 
-  const rawId = req.params.id.replace(/^u_/, '')  // strip u_ prefix
+  const rawId = req.params.id.replace(/^u_/, '')
   const meta  = loadSongsMeta()
   const idx   = meta.findIndex(s => s.id === rawId)
 
   if (idx === -1) return res.status(404).json({ error: 'Song nicht gefunden' })
 
-  const song = meta[idx]
-
-  // Permission check: must be admin OR username matches artist
+  const song    = meta[idx]
   const isAdmin  = user.isAdmin === true
   const isArtist = user.username.toLowerCase() === song.artist.toLowerCase()
 
   if (!isAdmin && !isArtist)
     return res.status(403).json({ error: 'Keine Berechtigung. Dein Benutzername muss mit dem Künstlernamen übereinstimmen.' })
+
+  // Remove from R2 — extract key from URL
+  const deletePromises = []
+
+  if (song.mp3Url) {
+    const mp3Key = decodeURIComponent(song.mp3Url.replace(`${R2_PUBLIC_URL}/`, ''))
+    deletePromises.push(deleteFromR2(mp3Key).catch(e => console.error('R2 MP3 delete failed:', e.message)))
+  }
+  if (song.coverUrl) {
+    const coverKey = decodeURIComponent(song.coverUrl.replace(`${R2_PUBLIC_URL}/`, ''))
+    deletePromises.push(deleteFromR2(coverKey).catch(e => console.error('R2 Cover delete failed:', e.message)))
+  }
+
+  await Promise.all(deletePromises)
 
   // Remove from metadata
   meta.splice(idx, 1)
