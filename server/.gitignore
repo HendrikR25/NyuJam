@@ -1,0 +1,21 @@
+# Environment
+.env
+.env.local
+
+# Dependencies
+node_modules
+
+# Data files (now in Supabase)
+users.json
+playlists.json
+favorites.json
+social.json
+songs_meta.json
+radio_sessions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
