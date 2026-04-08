@@ -5,7 +5,8 @@ const path    = require('path')
 const fs      = require('fs')
 const crypto  = require('crypto')
 const multer  = require('multer')
-const bcrypt = require('bcryptjs')
+const bcrypt  = require('bcryptjs')
+const { createClient } = require('@supabase/supabase-js')
 
 const app = express()
 app.use(cors({
