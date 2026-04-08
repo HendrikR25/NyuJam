@@ -94,18 +94,28 @@
 
       <!-- Albums Tab -->
       <div class="tab-content" key="albums" v-else>
-        <div class="albums-grid">
-          <div
-            v-for="(album, idx) in artist.albums"
-            :key="album.id"
-            class="album-card"
-            :style="{ '--i': idx, '--color': artist.color }"
-          >
-            <div class="ac-cover" :style="{ background: `linear-gradient(135deg, ${artist.color}44, ${artist.color}11)` }">
-              <span class="ac-icon">{{ album.icon }}</span>
+        <div v-if="!artist.albums.length" class="empty-albums">
+          <span style="font-size:2rem;opacity:0.3">▣</span>
+          <p style="font-size:0.8rem;color:rgba(240,237,230,0.3);margin-top:0.5rem">Noch keine Alben</p>
+        </div>
+        <div class="albums-list" v-else>
+          <div v-for="(album, idx) in artist.albums" :key="album.id" class="album-card" :style="{ '--i': idx, '--color': artist.color }">
+            <div class="ac-cover" :style="{ background: album.coverUrl ? 'none' : `linear-gradient(135deg, ${artist.color}44, ${artist.color}11)` }">
+              <img v-if="album.coverUrl" :src="album.coverUrl" class="ac-cover-img" />
+              <span v-else class="ac-icon">▣</span>
             </div>
-            <span class="ac-name">{{ album.name }}</span>
-            <span class="ac-year">{{ album.year }} · {{ album.tracks }} Tracks</span>
+            <div class="ac-info">
+              <span class="ac-name">{{ album.title }}</span>
+              <span class="ac-year">{{ album.releasedAt?.slice(0,4) }} · {{ album.songs.length }} Tracks</span>
+            </div>
+            <!-- Track list -->
+            <div class="ac-tracks">
+              <div v-for="song in album.songs" :key="song.id" class="ac-track" @click="playSong(song)">
+                <span class="act-nr">{{ song.trackNr }}</span>
+                <span class="act-name">{{ song.name }}</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" style="color:rgba(240,237,230,0.2);flex-shrink:0"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -129,7 +139,8 @@ const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 const activeTab      = ref('songs')
 const artistName     = route.params.name ?? 'Unbekannt'
 const totalStreams    = ref(0)
-const songStreamMap  = ref({})  // { songId: count }
+const songStreamMap  = ref({})
+const realAlbums     = ref([])
 
 // Accent colors per artist
 const artistColors = {
@@ -162,11 +173,6 @@ const artistSongs = computed(() =>
     .sort((a, b) => b.streams - a.streams)
 )
 
-const staticAlbums = [
-  { id: 1, name: 'The North Borders', year: 2013, tracks: 12, icon: '🌿' },
-  { id: 2, name: 'Black Sands',       year: 2010, tracks: 14, icon: '◎' },
-]
-
 const artist = computed(() => ({
   name:          artistName,
   icon:          artistIcons[artistName]  ?? '◉',
@@ -174,7 +180,7 @@ const artist = computed(() => ({
   genre:         artistGenres[artistName] ?? 'Music',
   allTimeStreams: totalStreams.value,
   songs:         artistSongs.value,
-  albums:        staticAlbums,
+  albums:        realAlbums.value,
 }))
 
 // ── Stream counter animation ───────────────────────────
@@ -184,16 +190,18 @@ const streamBars    = ref(Array.from({ length: 24 }, () => Math.floor(Math.rando
 onMounted(async () => {
   if (!player.songs.length) await player.loadSongs()
 
-  // Load real stream data
-  const [artistRes, songsRes] = await Promise.all([
+  const [artistRes, songsRes, albumsRes] = await Promise.all([
     fetch(`${BASE_URL}/api/streams/artist/${encodeURIComponent(artistName)}`),
     fetch(`${BASE_URL}/api/streams/artist/${encodeURIComponent(artistName)}/songs`),
+    fetch(`${BASE_URL}/api/albums/artist/${encodeURIComponent(artistName)}`),
   ])
   const artistData = await artistRes.json()
   const songsData  = await songsRes.json()
+  const albumsData = await albumsRes.json()
 
-  totalStreams.value   = artistData.streams || 0
-  songStreamMap.value  = songsData || {}
+  totalStreams.value  = artistData.streams || 0
+  songStreamMap.value = songsData || {}
+  realAlbums.value    = Array.isArray(albumsData) ? albumsData : []
   animateCounter(totalStreams.value)
 
   setInterval(() => {
@@ -339,21 +347,21 @@ function playSong(song) {
 .sr-like.liked { color: #ff5a32; }
 
 /* Albums */
-.albums-grid {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.85rem;
-}
-.album-card {
-  background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.08);
-  border-radius: 6px; padding: 1rem; cursor: pointer;
-  opacity: 0; transform: translateY(6px);
-  animation: slideUp 0.38s ease forwards;
-  animation-delay: calc(var(--i) * 60ms);
-  transition: background 0.2s, border-color 0.2s;
-}
-.album-card:hover { background: rgba(240,237,230,0.055); border-color: rgba(240,237,230,0.14); }
-.ac-cover { width: 100%; aspect-ratio: 1; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin-bottom: 0.75rem; box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
-.ac-name { display: block; font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.08em; color: #f0ede6; margin-bottom: 0.2rem; }
-.ac-year { display: block; font-size: 0.65rem; color: rgba(240,237,230,0.3); }
+.empty-albums { display: flex; flex-direction: column; align-items: center; padding: 3rem 1rem; }
+.albums-list { display: flex; flex-direction: column; gap: 1.5rem; width: 100%; }
+.album-card { display: flex; flex-direction: column; opacity: 0; transform: translateY(8px); animation: slideUp 0.4s ease forwards; animation-delay: calc(var(--i) * 80ms); }
+.ac-cover { width: 100%; aspect-ratio: 1; border-radius: 6px 6px 0 0; display: flex; align-items: center; justify-content: center; overflow: hidden; background: linear-gradient(135deg, rgba(91,106,255,0.3), rgba(91,106,255,0.1)); }
+.ac-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.ac-icon { font-size: 3rem; opacity: 0.4; }
+.ac-info { background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.07); border-top: none; padding: 0.85rem 1rem; display: flex; justify-content: space-between; align-items: center; }
+.ac-name { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.1em; color: #f0ede6; }
+.ac-year { font-size: 0.68rem; color: rgba(240,237,230,0.3); }
+.ac-tracks { border: 1px solid rgba(240,237,230,0.07); border-top: none; border-radius: 0 0 6px 6px; overflow: hidden; }
+.ac-track { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 1rem; cursor: pointer; transition: background 0.15s; border-bottom: 1px solid rgba(240,237,230,0.04); }
+.ac-track:last-child { border-bottom: none; }
+.ac-track:hover { background: rgba(240,237,230,0.04); }
+.act-nr { font-size: 0.7rem; color: rgba(240,237,230,0.2); width: 1.2rem; text-align: center; flex-shrink: 0; }
+.act-name { flex: 1; font-size: 0.88rem; color: rgba(240,237,230,0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* Tab transition */
 .tab-swap-enter-active, .tab-swap-leave-active { transition: opacity 0.2s, transform 0.2s; }

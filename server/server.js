@@ -558,6 +558,113 @@ app.delete('/api/search/history', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Albums ─────────────────────────────────────────────
+// GET /api/albums/artist/:name — all albums for an artist with their songs
+app.get('/api/albums/artist/:name', async (req, res) => {
+  const artist = decodeURIComponent(req.params.name)
+  const { data: albums } = await sb.from('albums').select('*, album_songs(track_nr, songs_meta(*))').ilike('artist', artist).order('released_at', { ascending: false })
+  if (!albums) return res.json([])
+  const result = albums.map(a => ({
+    id:          a.id,
+    title:       a.title,
+    artist:      a.artist,
+    coverUrl:    a.cover_url,
+    country:     a.country,
+    releasedAt:  a.released_at,
+    songs:       (a.album_songs || [])
+      .sort((x, y) => x.track_nr - y.track_nr)
+      .map(as => ({
+        id:       `u_${as.songs_meta.id}`,
+        name:     as.songs_meta.title,
+        artist:   as.songs_meta.artist,
+        cover:    as.songs_meta.cover_url,
+        url:      as.songs_meta.mp3_url,
+        trackNr:  as.track_nr,
+      })),
+  }))
+  res.json(result)
+})
+
+// POST /api/albums — create album with multiple songs
+app.post('/api/albums', upload.fields([
+  { name: 'cover',     maxCount: 1 },
+  ...Array.from({ length: 20 }, (_, i) => ({ name: `mp3_${i}`, maxCount: 1 })),
+]), async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  const title      = req.body.title?.trim()
+  const artist     = req.body.artist?.trim() || user.username
+  const country    = req.body.country?.trim()
+  const city       = req.body.city?.trim() || null
+  const continent  = req.body.continent?.trim() || null
+  const releasedAt = req.body.releasedAt?.trim() || new Date().toISOString().split('T')[0]
+
+  if (!title)   return res.status(400).json({ error: 'Albumtitel fehlt' })
+  if (!country) return res.status(400).json({ error: 'Land fehlt' })
+
+  // Parse track titles & artists
+  let tracks = []
+  try { tracks = JSON.parse(req.body.tracks || '[]') } catch {}
+  if (!tracks.length) return res.status(400).json({ error: 'Keine Songs angegeben' })
+
+  try {
+    const albumId = Date.now().toString()
+
+    // Upload cover if provided
+    let coverUrl = null
+    if (req.files?.cover?.[0]) {
+      const coverFile = req.files.cover[0]
+      const coverKey  = `covers/${albumId}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+      coverUrl = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
+    }
+
+    // Create album
+    await sb.from('albums').insert({ id: albumId, title, artist, cover_url: coverUrl, country, city, continent, released_at: releasedAt, uploaded_by: user.id })
+
+    // Upload each track
+    const songIds = []
+    for (let i = 0; i < tracks.length; i++) {
+      const mp3File = req.files?.[`mp3_${i}`]?.[0]
+      if (!mp3File) continue
+      const songId  = `${Date.now()}_${i}`
+      const mp3Key  = `music/${songId}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+      const mp3Url  = await uploadToR2(mp3File.buffer, mp3Key, 'audio/mpeg')
+      const trackTitle  = tracks[i].title?.trim() || mp3File.originalname.replace('.mp3', '')
+      const trackArtist = tracks[i].artist?.trim() || artist
+      await sb.from('songs_meta').insert({ id: songId, title: trackTitle, artist: trackArtist, mp3_url: mp3Url, cover_url: coverUrl, country, city, continent, uploaded_by: user.id })
+      await sb.from('album_songs').insert({ id: `${albumId}_${i}`, album_id: albumId, song_id: songId, track_nr: i + 1 })
+      songIds.push(songId)
+    }
+
+    res.status(201).json({ id: albumId, title, artist, coverUrl, tracks: songIds.length })
+  } catch (err) {
+    console.error('Album upload error:', err.message)
+    res.status(500).json({ error: `Upload fehlgeschlagen: ${err.message}` })
+  }
+})
+
+// DELETE /api/albums/:id
+app.delete('/api/albums/:id', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: album } = await sb.from('albums').select('*').eq('id', req.params.id).single()
+  if (!album) return res.status(404).json({ error: 'Album nicht gefunden' })
+  if (!user.is_admin && user.username.toLowerCase() !== album.artist.toLowerCase())
+    return res.status(403).json({ error: 'Keine Berechtigung.' })
+  // Delete all songs in album from R2 + songs_meta
+  const { data: albumSongs } = await sb.from('album_songs').select('songs_meta(*)').eq('album_id', req.params.id)
+  for (const as of albumSongs || []) {
+    const s = as.songs_meta
+    if (s?.mp3_url)   await deleteFromR2(decodeURIComponent(s.mp3_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+    if (s?.cover_url) await deleteFromR2(decodeURIComponent(s.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+    await sb.from('songs_meta').delete().eq('id', s.id)
+  }
+  if (album.cover_url) await deleteFromR2(decodeURIComponent(album.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+  await sb.from('albums').delete().eq('id', req.params.id)
+  res.json({ ok: true })
+})
+
 // ── Streams ────────────────────────────────────────────
 // POST /api/streams — log a play
 app.post('/api/streams', async (req, res) => {
