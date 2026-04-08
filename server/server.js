@@ -7,6 +7,7 @@ const crypto  = require('crypto')
 const multer  = require('multer')
 const bcrypt  = require('bcryptjs')
 const rateLimit = require('express-rate-limit')
+const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { createClient } = require('@supabase/supabase-js')
 
 const app = express()
@@ -554,6 +555,48 @@ app.delete('/api/search/history', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   await sb.from('search_history').delete().eq('user_id', user.id)
   res.json({ ok: true })
+})
+
+// ── Donations (Stripe) ────────────────────────────────
+app.post('/api/donations/create-payment-intent', async (req, res) => {
+  const { amount, message, artistName } = req.body
+  if (!amount || amount < 1) return res.status(400).json({ error: 'Ungültiger Betrag' })
+  if (amount > 999) return res.status(400).json({ error: 'Maximalbetrag: 999€' })
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount:   Math.round(amount * 100),  // Stripe erwartet Cents
+      currency: 'eur',
+      metadata: {
+        message:    message?.slice(0, 500) || '',
+        artistName: artistName || 'NyuJam',
+        type:       artistName ? 'artist' : 'platform',
+      },
+      automatic_payment_methods: { enabled: true },
+    })
+    res.json({ clientSecret: paymentIntent.client_secret })
+  } catch (err) {
+    console.error('Stripe error:', err.message)
+    res.status(500).json({ error: 'Zahlung konnte nicht erstellt werden.' })
+  }
+})
+
+// Stripe Webhook — bestätigt erfolgreiche Zahlung
+app.post('/api/donations/webhook', express.raw({ type: 'application/json' }), (req, res) => {
+  const sig    = req.headers['stripe-signature']
+  const secret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!secret) return res.json({ received: true })
+  try {
+    const event = stripe.webhooks.constructEvent(req.body, sig, secret)
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data.object
+      console.log(`✅ Donation: ${pi.amount / 100}€ für ${pi.metadata.artistName}`)
+    }
+    res.json({ received: true })
+  } catch (err) {
+    console.error('Webhook error:', err.message)
+    res.status(400).send(`Webhook Error: ${err.message}`)
+  }
 })
 
 // ── Radio Sessions ─────────────────────────────────────
