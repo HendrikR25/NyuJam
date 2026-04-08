@@ -6,6 +6,7 @@ const fs      = require('fs')
 const crypto  = require('crypto')
 const multer  = require('multer')
 const bcrypt  = require('bcryptjs')
+const rateLimit = require('express-rate-limit')
 const { createClient } = require('@supabase/supabase-js')
 
 const app = express()
@@ -19,6 +20,38 @@ app.use(cors({
   credentials: true,
 }))
 app.use(express.json({ limit: '10mb' }))
+
+// ── Rate Limiting ──────────────────────────────────────
+// Streng für Auth-Endpoints (Login/Register)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,  // 15 Minuten
+  max: 20,                    // max 20 Versuche pro IP
+  message: { error: 'Zu viele Anfragen. Bitte warte 15 Minuten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Locker für allgemeine API-Anfragen
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,   // 1 Minute
+  max: 100,                   // max 100 Anfragen pro IP
+  message: { error: 'Zu viele Anfragen. Bitte kurz warten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Streng für Upload
+const uploadLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,  // 1 Stunde
+  max: 20,                    // max 20 Uploads pro Stunde
+  message: { error: 'Upload-Limit erreicht. Bitte warte eine Stunde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+app.use('/api/auth', authLimiter)
+app.use('/api/upload', uploadLimiter)
+app.use('/api', apiLimiter)
 
 // ── Supabase ───────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://jodlwspmkwhparwinttz.supabase.co'
