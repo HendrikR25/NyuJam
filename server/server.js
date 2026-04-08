@@ -558,6 +558,39 @@ app.delete('/api/search/history', async (req, res) => {
   res.json({ ok: true })
 })
 
+// ── Streams ────────────────────────────────────────────
+// POST /api/streams — log a play
+app.post('/api/streams', async (req, res) => {
+  const { songId, songName, artist } = req.body
+  if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  await sb.from('streams').insert({ song_id: String(songId), song_name: songName || null, artist: artist || null })
+  res.json({ ok: true })
+})
+
+// GET /api/streams/song/:songId — stream count for one song
+app.get('/api/streams/song/:songId', async (req, res) => {
+  const { count } = await sb.from('streams').select('*', { count: 'exact', head: true }).eq('song_id', req.params.songId)
+  res.json({ songId: req.params.songId, streams: count || 0 })
+})
+
+// GET /api/streams/artist/:name — total streams for artist
+app.get('/api/streams/artist/:name', async (req, res) => {
+  const name = decodeURIComponent(req.params.name)
+  const { count } = await sb.from('streams').select('*', { count: 'exact', head: true }).ilike('artist', name)
+  res.json({ artist: name, streams: count || 0 })
+})
+
+// GET /api/streams/artist/:name/songs — per-song stream counts for artist
+app.get('/api/streams/artist/:name/songs', async (req, res) => {
+  const name = decodeURIComponent(req.params.name)
+  const { data } = await sb.from('streams').select('song_id, song_name').ilike('artist', name)
+  const counts = {}
+  for (const row of data || []) {
+    counts[row.song_id] = (counts[row.song_id] || 0) + 1
+  }
+  res.json(counts)
+})
+
 // ── Donations (Stripe) ────────────────────────────────
 app.post('/api/donations/create-payment-intent', async (req, res) => {
   const { amount, message, artistName } = req.body

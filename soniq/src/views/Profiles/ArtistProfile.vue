@@ -124,57 +124,47 @@ const router = useRouter()
 const route  = useRoute()
 const player = usePlayerStore()
 
-const activeTab = ref('songs')
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
-// ── Artist data (derived from player songs + static meta) ──
-const artistName = route.params.name ?? 'Bonobo'
+const activeTab      = ref('songs')
+const artistName     = route.params.name ?? 'Unbekannt'
+const totalStreams    = ref(0)
+const songStreamMap  = ref({})  // { songId: count }
 
 // Accent colors per artist
 const artistColors = {
-  'Bonobo':       '#32c8a0',
-  'M83':          '#5b6aff',
-  'Frank Ocean':  '#c864f0',
-  'Petit Biscuit':'#ff8c55',
-  'Daft Punk':    '#f0c832',
-  'Jon Hopkins':  '#ff5a32',
-  'YOASOBI':      '#ff5a32',
-  'Odesza':       '#5b6aff',
-  'Kendrick Lamar':'#ff5a32',
-  'The Weeknd':   '#c864f0',
+  'Bonobo':'#32c8a0','M83':'#5b6aff','Frank Ocean':'#c864f0',
+  'Petit Biscuit':'#ff8c55','Daft Punk':'#f0c832','Jon Hopkins':'#ff5a32',
+  'YOASOBI':'#ff5a32','Odesza':'#5b6aff','Kendrick Lamar':'#ff5a32','The Weeknd':'#c864f0',
 }
-
 const artistIcons = {
-  'Bonobo': '🌿', 'M83': '◈', 'Frank Ocean': '🌊', 'Petit Biscuit': '☁️',
-  'Daft Punk': '⚡', 'Jon Hopkins': '◎', 'YOASOBI': '🌸', 'Odesza': '⊹',
-  'Kendrick Lamar': '◇', 'The Weeknd': '🌙',
+  'Bonobo':'🌿','M83':'◈','Frank Ocean':'🌊','Petit Biscuit':'☁️',
+  'Daft Punk':'⚡','Jon Hopkins':'◎','YOASOBI':'🌸','Odesza':'⊹',
+  'Kendrick Lamar':'◇','The Weeknd':'🌙',
 }
-
 const artistGenres = {
-  'Bonobo': 'Electronic · Jazz', 'M83': 'Synthpop · Dream Pop',
-  'Frank Ocean': 'R&B · Soul', 'Petit Biscuit': 'Electronic',
-  'Daft Punk': 'House · Electronic', 'Jon Hopkins': 'Ambient · Techno',
-  'YOASOBI': 'J-Pop', 'Odesza': 'Electronic',
-  'Kendrick Lamar': 'Hip-Hop', 'The Weeknd': 'R&B · Pop',
+  'Bonobo':'Electronic · Jazz','M83':'Synthpop · Dream Pop',
+  'Frank Ocean':'R&B · Soul','Petit Biscuit':'Electronic',
+  'Daft Punk':'House · Electronic','Jon Hopkins':'Ambient · Techno',
+  'YOASOBI':'J-Pop','Odesza':'Electronic',
+  'Kendrick Lamar':'Hip-Hop','The Weeknd':'R&B · Pop',
 }
 
-// Get songs for this artist from the player store
 const artistSongs = computed(() =>
   player.songs
     .filter(s => s.artist === artistName)
-    .map((s, i) => ({
+    .map(s => ({
       ...s,
       album:   'Unknown Album',
-      year:    2020 + (i % 4),
-      streams: Math.floor(Math.random() * 50_000_000) + 1_000_000,
+      year:    2024,
+      streams: songStreamMap.value[String(s.id)] || 0,
     }))
+    .sort((a, b) => b.streams - a.streams)
 )
 
-// Static albums (demo)
 const staticAlbums = [
   { id: 1, name: 'The North Borders', year: 2013, tracks: 12, icon: '🌿' },
   { id: 2, name: 'Black Sands',       year: 2010, tracks: 14, icon: '◎' },
-  { id: 3, name: 'Migration',         year: 2017, tracks: 14, icon: '◈' },
-  { id: 4, name: 'Fragments',         year: 2022, tracks: 13, icon: '⊹' },
 ]
 
 const artist = computed(() => ({
@@ -182,7 +172,7 @@ const artist = computed(() => ({
   icon:          artistIcons[artistName]  ?? '◉',
   color:         artistColors[artistName] ?? '#5b6aff',
   genre:         artistGenres[artistName] ?? 'Music',
-  allTimeStreams: 148_392_847,
+  allTimeStreams: totalStreams.value,
   songs:         artistSongs.value,
   albums:        staticAlbums,
 }))
@@ -193,8 +183,19 @@ const streamBars    = ref(Array.from({ length: 24 }, () => Math.floor(Math.rando
 
 onMounted(async () => {
   if (!player.songs.length) await player.loadSongs()
-  animateCounter(148_392_847)
-  // Re-randomize bars periodically for live feel
+
+  // Load real stream data
+  const [artistRes, songsRes] = await Promise.all([
+    fetch(`${BASE_URL}/api/streams/artist/${encodeURIComponent(artistName)}`),
+    fetch(`${BASE_URL}/api/streams/artist/${encodeURIComponent(artistName)}/songs`),
+  ])
+  const artistData = await artistRes.json()
+  const songsData  = await songsRes.json()
+
+  totalStreams.value   = artistData.streams || 0
+  songStreamMap.value  = songsData || {}
+  animateCounter(totalStreams.value)
+
   setInterval(() => {
     streamBars.value = streamBars.value.map(v => Math.max(10, Math.min(100, v + (Math.random() - 0.5) * 20)))
   }, 2000)

@@ -72,10 +72,16 @@ export const usePlayerStore = defineStore('player', () => {
     error.value       = null
     currentTime.value = 0
     duration.value    = 0
-    // sync liked state
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
     audio.src         = song.url
     audio.load()
+
+    // Log stream (fire & forget)
+    fetch(`${BASE_URL}/api/streams`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ songId: song.id, songName: song.name, artist: song.artist }),
+    }).catch(() => {})
 
     const tryPlay = () => {
       audio.play()
