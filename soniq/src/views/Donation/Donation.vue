@@ -347,8 +347,8 @@ function resetForm() {
 .error-msg { background: rgba(255,90,50,0.1); border: 1px solid rgba(255,90,50,0.3); border-radius: 3px; padding: 0.55rem 1rem; font-size: 0.78rem; color: #ff8060; }
 
 /* Payment overlay */
-.payment-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-.payment-card { background: #0e0e18; border: 1px solid rgba(240,237,230,0.1); border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; position: relative; animation: successPop 0.3s ease both; }
+.payment-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: flex; align-items: flex-start; justify-content: center; padding: 1.5rem; overflow-y: auto; }
+.payment-card { background: #0e0e18; border: 1px solid rgba(240,237,230,0.1); border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; position: relative; animation: successPop 0.3s ease both; margin: auto; }
 .pc-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 1rem; transition: color 0.2s; }
 .pc-close:hover { color: #ff5a32; }
 .pc-title { font-family: 'Bebas Neue', cursive; font-size: 1.8rem; letter-spacing: 0.15em; margin-bottom: 0.3rem; }
