@@ -5,7 +5,7 @@ const path    = require('path')
 const fs      = require('fs')
 const crypto  = require('crypto')
 const multer  = require('multer')
-const { createClient } = require('@supabase/supabase-js')
+const bcrypt = require('bcryptjs')
 
 const app = express()
 app.use(cors({
@@ -315,7 +315,8 @@ app.post('/api/auth/register', async (req, res) => {
   if (existE) return res.status(409).json({ error: 'E-Mail bereits registriert.' })
   const id    = Date.now().toString()
   const token = simpleToken(id)
-  const { data, error } = await sb.from('users').insert({ id, username: username.trim(), email: email.trim().toLowerCase(), password, bio: '', is_public: true, is_admin: false, token }).select().single()
+  const hashedPassword = await bcrypt.hash(password, 10)
+  const { data, error } = await sb.from('users').insert({ id, username: username.trim(), email: email.trim().toLowerCase(), password: hashedPassword, bio: '', is_public: true, is_admin: false, token }).select().single()
   if (error) return res.status(500).json({ error: error.message })
   res.status(201).json({ user: safeUser(data), token })
 })
@@ -326,7 +327,9 @@ app.post('/api/auth/login', async (req, res) => {
   const { data: byUsername } = await sb.from('users').select('*').ilike('username', identifier).single()
   const { data: byEmail }    = await sb.from('users').select('*').ilike('email', identifier).single()
   const user = byUsername || byEmail
-  if (!user || user.password !== password) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
+  if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
+  const passwordMatch = await bcrypt.compare(password, user.password)
+  if (!passwordMatch) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
   const token = simpleToken(user.id)
   await sb.from('users').update({ token }).eq('id', user.id)
   user.token = token
