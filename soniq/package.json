@@ -15,6 +15,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@stripe/stripe-js": "^9.1.0",
     "@vercel/analytics": "^2.0.1",
     "d3": "^7.9.0",
     "pinia": "^3.0.4",
