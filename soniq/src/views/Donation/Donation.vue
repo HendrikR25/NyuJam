@@ -3,12 +3,6 @@
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
 
-    <!-- Ad Banner -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top"><div class="ad-placeholder">Advertisement</div></slot>
-    </div>
-
     <NavBar back-to="/" />
 
     <!-- Header -->
@@ -20,21 +14,11 @@
 
     <!-- Mode Tabs -->
     <div class="mode-tabs">
-      <button
-        class="mode-tab"
-        :class="{ active: mode === 'platform' }"
-        @click="mode = 'platform'; resetForm()"
-      >
-        <span class="mt-icon">◈</span>
-        NyuJam
+      <button class="mode-tab" :class="{ active: mode === 'platform' }" @click="mode = 'platform'; resetForm()">
+        <span class="mt-icon">◈</span> NyuJam
       </button>
-      <button
-        class="mode-tab"
-        :class="{ active: mode === 'artist' }"
-        @click="mode = 'artist'; resetForm()"
-      >
-        <span class="mt-icon">♩</span>
-        Künstler
+      <button class="mode-tab" :class="{ active: mode === 'artist' }" @click="mode = 'artist'; resetForm()">
+        <span class="mt-icon">♩</span> Künstler
       </button>
     </div>
 
@@ -43,205 +27,173 @@
       <div class="donation-panel" key="platform" v-if="mode === 'platform'">
         <div class="panel-intro">
           <div class="pi-logo">◈ NyuJam</div>
-          <p class="pi-text">
-            Deine Spende hilft uns, NyuJam weiterzuentwickeln, Server zu betreiben
-            und Musik für alle zugänglich zu halten.
-          </p>
+          <p class="pi-text">Deine Spende hilft uns, NyuJam weiterzuentwickeln, Server zu betreiben und Musik für alle zugänglich zu halten.</p>
         </div>
 
-        <!-- Amount presets -->
         <div class="amount-grid">
-          <button
-            v-for="a in platformAmounts" :key="a"
-            class="amount-btn"
-            :class="{ active: selectedAmount === a && !customActive }"
-            @click="selectAmount(a)"
-          >{{ a }} €</button>
-          <button
-            class="amount-btn amount-btn--custom"
-            :class="{ active: customActive }"
-            @click="customActive = true; selectedAmount = null"
-          >Eigener Betrag</button>
+          <button v-for="a in platformAmounts" :key="a" class="amount-btn" :class="{ active: selectedAmount === a && !customActive }" @click="selectAmount(a)">{{ a }} €</button>
+          <button class="amount-btn amount-btn--custom" :class="{ active: customActive }" @click="customActive = true; selectedAmount = null">Eigener Betrag</button>
         </div>
 
-        <input
-          v-if="customActive"
-          v-model="customAmount"
-          class="custom-input"
-          type="number" min="1" placeholder="Betrag in €"
-        />
+        <input v-if="customActive" v-model="customAmount" class="custom-input" type="number" min="1" max="999" placeholder="Betrag in €" />
 
-        <!-- Message -->
-        <textarea
-          v-model="message"
-          class="message-input"
-          placeholder="Optionale Nachricht an das NyuJam-Team..."
-          rows="3"
-        ></textarea>
+        <textarea v-model="message" class="message-input" placeholder="Optionale Nachricht an das NyuJam-Team..." rows="3"></textarea>
 
-        <button class="donate-btn donate-btn--platform" @click="submitDonation" :disabled="!canDonate">
-          <span class="db-icon">€</span>
-          {{ canDonate ? `${finalAmount} € an NyuJam spenden` : 'Betrag wählen' }}
+        <div class="error-msg" v-if="errorMsg">⚠ {{ errorMsg }}</div>
+
+        <button class="donate-btn" @click="startPayment" :disabled="!canDonate || paying">
+          <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
+          <span v-else>{{ canDonate ? `${finalAmount} € spenden` : 'Betrag wählen' }}</span>
         </button>
       </div>
 
       <!-- ── Artist Donation ── -->
       <div class="donation-panel" key="artist" v-else>
         <div class="panel-intro">
-          <p class="pi-text">
-            Unterstütze deinen Lieblingskünstler direkt. 100% des Betrags
-            gehen ohne Abzüge an den Künstler.
-          </p>
+          <p class="pi-text">Unterstütze deinen Lieblingskünstler direkt. 100% des Betrags gehen ohne Abzüge an den Künstler.</p>
         </div>
 
-        <!-- Artist search -->
         <div class="artist-search-wrap" :class="{ focused: artistFocused }">
           <span class="as-icon">♩</span>
-          <input
-            v-model="artistQuery"
-            class="artist-input"
-            placeholder="Künstler suchen..."
-            @focus="artistFocused = true"
-            @blur="artistFocused = false"
-            @input="searchArtists"
-          />
+          <input v-model="artistQuery" class="artist-input" placeholder="Künstler suchen..." @focus="artistFocused = true" @blur="artistFocused = false" @input="searchArtists" />
           <button v-if="artistQuery" class="as-clear" @click="artistQuery = ''; selectedArtist = null; artistResults = []">✕</button>
         </div>
 
-        <!-- Artist results -->
         <div class="artist-results" v-if="artistResults.length && !selectedArtist">
-          <div
-            v-for="(a, idx) in artistResults" :key="a.id"
-            class="artist-result"
-            :style="{ '--i': idx, '--color': a.color }"
-            @click="pickArtist(a)"
-          >
-            <div class="ar-avatar" :style="{ background: a.color + '33', borderColor: a.color + '55' }">{{ a.icon }}</div>
-            <div class="ar-info">
-              <span class="ar-name">{{ a.name }}</span>
-              <span class="ar-genre">{{ a.genre }}</span>
-            </div>
+          <div v-for="(a, idx) in artistResults" :key="a.id" class="artist-result" :style="{ '--i': idx }" @click="pickArtist(a)">
+            <div class="ar-avatar">{{ a.name[0] }}</div>
+            <span class="ar-name">{{ a.name }}</span>
             <span class="ar-arrow">→</span>
           </div>
         </div>
 
-        <!-- Selected artist -->
         <transition name="artist-pop">
-          <div class="selected-artist" v-if="selectedArtist" :style="{ '--color': selectedArtist.color }">
-            <div class="sa-avatar" :style="{ background: selectedArtist.color + '33', borderColor: selectedArtist.color + '55' }">
-              {{ selectedArtist.icon }}
-            </div>
+          <div class="selected-artist" v-if="selectedArtist">
+            <div class="sa-avatar">{{ selectedArtist.name[0] }}</div>
             <div class="sa-info">
               <span class="sa-name">{{ selectedArtist.name }}</span>
-              <span class="sa-genre">{{ selectedArtist.genre }}</span>
+              <span class="sa-sub">Künstler auf NyuJam</span>
             </div>
             <button class="sa-change" @click="selectedArtist = null; artistQuery = ''">Ändern</button>
           </div>
         </transition>
 
-        <!-- Amount presets -->
         <div class="amount-grid" v-if="selectedArtist">
-          <button
-            v-for="a in artistAmounts" :key="a"
-            class="amount-btn"
-            :class="{ active: selectedAmount === a && !customActive }"
-            :style="selectedAmount === a && !customActive ? { '--accent': selectedArtist.color } : {}"
-            @click="selectAmount(a)"
-          >{{ a }} €</button>
-          <button
-            class="amount-btn amount-btn--custom"
-            :class="{ active: customActive }"
-            @click="customActive = true; selectedAmount = null"
-          >Eigener</button>
+          <button v-for="a in platformAmounts" :key="a" class="amount-btn" :class="{ active: selectedAmount === a && !customActive }" @click="selectAmount(a)">{{ a }} €</button>
+          <button class="amount-btn amount-btn--custom" :class="{ active: customActive }" @click="customActive = true; selectedAmount = null">Eigener Betrag</button>
         </div>
 
-        <input
-          v-if="customActive && selectedArtist"
-          v-model="customAmount"
-          class="custom-input"
-          type="number" min="1" placeholder="Betrag in €"
-        />
+        <input v-if="customActive && selectedArtist" v-model="customAmount" class="custom-input" type="number" min="1" max="999" placeholder="Betrag in €" />
 
-        <textarea
-          v-if="selectedArtist"
-          v-model="message"
-          class="message-input"
-          placeholder="Optionale Nachricht an den Künstler..."
-          rows="3"
-        ></textarea>
+        <textarea v-if="selectedArtist" v-model="message" class="message-input" placeholder="Nachricht an den Künstler..." rows="3"></textarea>
 
-        <button
-          v-if="selectedArtist"
-          class="donate-btn"
-          :style="canDonate ? { background: selectedArtist.color, boxShadow: `0 0 24px ${selectedArtist.color}55` } : {}"
-          @click="submitDonation"
-          :disabled="!canDonate"
-        >
-          <span class="db-icon">♩</span>
-          {{ canDonate ? `${finalAmount} € an ${selectedArtist.name} spenden` : 'Betrag wählen' }}
+        <div class="error-msg" v-if="errorMsg">⚠ {{ errorMsg }}</div>
+
+        <button class="donate-btn donate-btn--artist" v-if="selectedArtist" @click="startPayment" :disabled="!canDonate || paying">
+          <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
+          <span v-else>{{ canDonate ? `${finalAmount} € an ${selectedArtist.name} spenden` : 'Betrag wählen' }}</span>
         </button>
       </div>
     </transition>
 
-    <!-- Success modal -->
-    <transition name="success-fade">
-      <div class="success-overlay" v-if="showSuccess" @click="showSuccess = false">
-        <div class="success-card" @click.stop>
-          <span class="sc-icon">✓</span>
-          <h2 class="sc-title">Danke!</h2>
-          <p class="sc-text" v-if="mode === 'platform'">
-            Du hast <strong>{{ lastDonation.amount }} €</strong> an NyuJam gespendet.
-          </p>
-          <p class="sc-text" v-else>
-            Du hast <strong>{{ lastDonation.amount }} €</strong> an <strong>{{ lastDonation.artist }}</strong> gespendet.
-          </p>
-          <button class="sc-close" @click="showSuccess = false">Schließen</button>
+    <!-- ── Stripe Payment Form ── -->
+    <transition name="overlay-fade">
+      <div class="payment-overlay" v-if="showPayment" @click.self="cancelPayment">
+        <div class="payment-card">
+          <button class="pc-close" @click="cancelPayment">✕</button>
+          <h2 class="pc-title">Zahlung</h2>
+          <p class="pc-amount">{{ finalAmount }} € {{ mode === 'artist' ? `an ${selectedArtist?.name}` : 'an NyuJam' }}</p>
+
+          <div id="payment-element" class="stripe-element"></div>
+
+          <div class="error-msg" v-if="stripeError">⚠ {{ stripeError }}</div>
+
+          <button class="confirm-btn" @click="confirmPayment" :disabled="confirmingPayment">
+            <span v-if="confirmingPayment"><span class="spinner"></span> Zahlung läuft...</span>
+            <span v-else>Jetzt zahlen</span>
+          </button>
         </div>
       </div>
     </transition>
+
+    <!-- ── Success ── -->
+    <transition name="overlay-fade">
+      <div class="payment-overlay" v-if="showSuccess">
+        <div class="success-card">
+          <div class="sc-icon">✓</div>
+          <h2 class="sc-title">Danke!</h2>
+          <p class="sc-text">Deine Spende von <strong>{{ lastAmount }} €</strong> ist angekommen. Du bist großartig! 🎵</p>
+          <button class="sc-close" @click="showSuccess = false; resetForm()">Schließen</button>
+        </div>
+      </div>
+    </transition>
+
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
+import { usePlayerStore } from '@/stores/player'
+import { loadStripe } from '@stripe/stripe-js'
 
-const router = useRouter()
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
 
-const mode          = ref('platform')
+const player = usePlayerStore()
+
+// ── State ──────────────────────────────────────────────
+const mode           = ref('platform')
 const selectedAmount = ref(null)
-const customActive  = ref(false)
-const customAmount  = ref('')
-const message       = ref('')
-const showSuccess   = ref(false)
-const lastDonation  = ref({})
-
-// Platform
-const platformAmounts = [1, 3, 5, 10, 20]
-const artistAmounts   = [1, 2, 5, 10, 25]
-
-// Artist
-const artistQuery   = ref('')
-const artistFocused = ref(false)
-const artistResults = ref([])
+const customActive   = ref(false)
+const customAmount   = ref('')
+const message        = ref('')
+const artistQuery    = ref('')
+const artistFocused  = ref(false)
+const artistResults  = ref([])
 const selectedArtist = ref(null)
+const errorMsg       = ref('')
+const paying         = ref(false)
+const showPayment    = ref(false)
+const stripeError    = ref('')
+const confirmingPayment = ref(false)
+const showSuccess    = ref(false)
+const lastAmount     = ref(0)
 
-const mockArtists = [
-  { id: 1, name: 'Bonobo',         genre: 'Electronic / Jazz',  icon: '🌿', color: '#32c8a0' },
-  { id: 2, name: 'M83',            genre: 'Synthpop',           icon: '◈',  color: '#5b6aff' },
-  { id: 3, name: 'Frank Ocean',    genre: 'R&B / Soul',         icon: '🌊', color: '#c864f0' },
-  { id: 4, name: 'Petit Biscuit',  genre: 'Electronic',         icon: '☁️', color: '#ff8c55' },
-  { id: 5, name: 'Daft Punk',      genre: 'House / Electronic', icon: '⚡', color: '#f0c832' },
-  { id: 6, name: 'Jon Hopkins',    genre: 'Ambient / Techno',   icon: '◎',  color: '#ff5a32' },
-  { id: 7, name: 'YOASOBI',        genre: 'J-Pop',              icon: '🌸', color: '#ff5a32' },
-  { id: 8, name: 'Odesza',         genre: 'Electronic',         icon: '⊹',  color: '#5b6aff' },
-]
+const platformAmounts = [1, 3, 5, 10, 20, 50]
 
+let stripeInstance = null
+let stripeElements = null
+let paymentElement = null
+
+onMounted(async () => {
+  if (!player.songs.length) player.loadSongs()
+  if (STRIPE_KEY) stripeInstance = await loadStripe(STRIPE_KEY)
+})
+
+const finalAmount = computed(() => {
+  if (customActive.value) return parseFloat(customAmount.value) || 0
+  return selectedAmount.value || 0
+})
+
+const canDonate = computed(() => finalAmount.value >= 1 && finalAmount.value <= 999)
+
+function selectAmount(a) {
+  selectedAmount.value = a
+  customActive.value   = false
+  customAmount.value   = ''
+}
+
+// ── Artist search ──────────────────────────────────────
 function searchArtists() {
-  const q = artistQuery.value.toLowerCase().trim()
+  const q = artistQuery.value.trim().toLowerCase()
   if (!q) { artistResults.value = []; return }
-  artistResults.value = mockArtists.filter(a => a.name.toLowerCase().includes(q))
+  const seen = new Set()
+  artistResults.value = player.songs
+    .filter(s => s.artist.toLowerCase().includes(q))
+    .filter(s => { if (seen.has(s.artist)) return false; seen.add(s.artist); return true })
+    .slice(0, 5)
+    .map(s => ({ id: s.id, name: s.artist }))
 }
 
 function pickArtist(a) {
@@ -250,41 +202,78 @@ function pickArtist(a) {
   artistResults.value  = []
 }
 
-function selectAmount(a) {
-  selectedAmount.value = a
-  customActive.value   = false
-  customAmount.value   = ''
+// ── Payment ────────────────────────────────────────────
+async function startPayment() {
+  if (!canDonate.value) return
+  errorMsg.value = ''
+  paying.value   = true
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/donations/create-payment-intent`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount:     finalAmount.value,
+        message:    message.value,
+        artistName: selectedArtist.value?.name || null,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+
+    // Mount Stripe Elements
+    showPayment.value  = true
+    stripeError.value  = ''
+
+    await new Promise(r => setTimeout(r, 100)) // wait for DOM
+
+    stripeElements = stripeInstance.elements({ clientSecret: data.clientSecret, appearance: { theme: 'night', variables: { colorPrimary: '#f0c832', colorBackground: '#0e0e18', colorText: '#f0ede6', borderRadius: '4px' } } })
+    paymentElement = stripeElements.create('payment')
+    paymentElement.mount('#payment-element')
+  } catch (e) {
+    errorMsg.value = e.message
+  } finally {
+    paying.value = false
+  }
 }
 
-const finalAmount = computed(() => {
-  if (customActive.value) return Number(customAmount.value) || 0
-  return selectedAmount.value ?? 0
-})
+async function confirmPayment() {
+  if (!stripeInstance || !stripeElements) return
+  confirmingPayment.value = true
+  stripeError.value = ''
 
-const canDonate = computed(() => {
-  if (finalAmount.value <= 0) return false
-  if (mode.value === 'artist' && !selectedArtist.value) return false
-  return true
-})
+  const { error } = await stripeInstance.confirmPayment({
+    elements: stripeElements,
+    confirmParams: { return_url: window.location.href },
+    redirect: 'if_required',
+  })
 
-function submitDonation() {
-  if (!canDonate.value) return
-  lastDonation.value = {
-    amount: finalAmount.value,
-    artist: selectedArtist.value?.name ?? 'NyuJam',
+  if (error) {
+    stripeError.value = error.message
+    confirmingPayment.value = false
+  } else {
+    lastAmount.value  = finalAmount.value
+    showPayment.value = false
+    showSuccess.value = true
+    confirmingPayment.value = false
   }
-  showSuccess.value = true
-  resetForm()
+}
+
+function cancelPayment() {
+  showPayment.value = false
+  stripeError.value = ''
+  if (paymentElement) { paymentElement.destroy(); paymentElement = null }
 }
 
 function resetForm() {
-  selectedAmount.value  = null
-  customActive.value    = false
-  customAmount.value    = ''
-  message.value         = ''
-  artistQuery.value     = ''
-  artistResults.value   = []
-  selectedArtist.value  = null
+  selectedAmount.value = null
+  customActive.value   = false
+  customAmount.value   = ''
+  message.value        = ''
+  artistQuery.value    = ''
+  artistResults.value  = []
+  selectedArtist.value = null
+  errorMsg.value       = ''
 }
 </script>
 
@@ -292,113 +281,103 @@ function resetForm() {
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-.donation-page {
-  min-height: 100vh; background: #0a0a0f; color: #f0ede6;
-  font-family: 'DM Sans', sans-serif;
-  display: flex; flex-direction: column; align-items: center;
-  padding: 0 1.5rem 4rem; position: relative; overflow-x: hidden;
-}
+.donation-page { min-height: 100vh; background: #0a0a0f; color: #f0ede6; font-family: 'DM Sans', sans-serif; display: flex; flex-direction: column; align-items: center; padding: 0 1.5rem 4rem; position: relative; overflow-x: hidden; }
 .bg-noise { position: fixed; inset: 0; pointer-events: none; z-index: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-size: 180px; opacity: 0.6; }
 .bg-glow { position: fixed; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(ellipse 60% 45% at 50% 20%, rgba(240,200,50,0.06) 0%, transparent 70%); }
 
-/* Ad */
-.ad-banner { position: relative; z-index: 1; width: 100%; max-width: 728px; min-height: 90px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-bottom: 1px solid rgba(240,237,230,0.07); padding: 0.75rem 0; margin-bottom: 1rem; }
-.ad-label { position: absolute; top: 4px; left: 0; font-size: 0.6rem; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(240,237,230,0.2); }
-.ad-placeholder { width: 100%; max-width: 728px; height: 90px; background: rgba(240,237,230,0.03); border: 1px dashed rgba(240,237,230,0.1); border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.15); }
-
-.back-btn { position: relative; z-index: 1; align-self: flex-start; background: none; border: none; cursor: pointer; color: rgba(240,237,230,0.35); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.1em; padding: 0.4rem 0; margin-bottom: 1.5rem; transition: color 0.2s; }
-.back-btn:hover { color: #ff5a32; }
-
-/* Header */
 .page-header { position: relative; z-index: 1; text-align: center; margin-bottom: 2rem; animation: fadeDown 0.5s ease both; }
 .header-icon { font-size: 2rem; color: #f0c832; display: block; margin-bottom: 0.3rem; }
-.page-title { font-family: 'Bebas Neue', cursive; font-size: 3rem; letter-spacing: 0.2em; color: #f0ede6; }
+.page-title { font-family: 'Bebas Neue', cursive; font-size: 3rem; letter-spacing: 0.2em; }
 .page-sub { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(240,237,230,0.25); margin-top: 0.35rem; }
 
-/* Mode tabs */
-.mode-tabs { position: relative; z-index: 1; display: flex; gap: 0.6rem; margin-bottom: 2rem; animation: fadeDown 0.5s 0.08s ease both; }
-.mode-tab { display: flex; align-items: center; gap: 0.5rem; font-family: 'DM Sans', sans-serif; font-size: 0.88rem; font-weight: 500; letter-spacing: 0.06em; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); color: rgba(240,237,230,0.4); border-radius: 3px; padding: 0.65rem 1.5rem; cursor: pointer; transition: all 0.2s; }
+.mode-tabs { position: relative; z-index: 1; display: flex; gap: 0.6rem; margin-bottom: 2rem; }
+.mode-tab { display: flex; align-items: center; gap: 0.5rem; font-family: 'DM Sans', sans-serif; font-size: 0.88rem; font-weight: 500; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); color: rgba(240,237,230,0.4); border-radius: 3px; padding: 0.65rem 1.5rem; cursor: pointer; transition: all 0.2s; }
 .mode-tab:hover { color: #f0ede6; border-color: rgba(240,237,230,0.2); }
 .mode-tab.active { background: rgba(240,200,50,0.1); border-color: rgba(240,200,50,0.35); color: #f0c832; }
-.mt-icon { font-size: 1rem; }
 
-/* Panel */
 .donation-panel { position: relative; z-index: 1; width: 100%; max-width: 460px; display: flex; flex-direction: column; gap: 1.1rem; }
 
 .panel-intro { background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 6px; padding: 1.1rem 1.2rem; }
 .pi-logo { font-family: 'Bebas Neue', cursive; font-size: 1.2rem; letter-spacing: 0.15em; color: #f0c832; margin-bottom: 0.5rem; }
 .pi-text { font-size: 0.82rem; color: rgba(240,237,230,0.45); line-height: 1.65; }
 
-/* Amount grid */
 .amount-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.55rem; }
 .amount-btn { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.1em; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); color: rgba(240,237,230,0.5); border-radius: 3px; padding: 0.7rem; cursor: pointer; transition: all 0.2s; }
 .amount-btn:hover { border-color: rgba(240,200,50,0.3); color: #f0ede6; background: rgba(240,200,50,0.06); }
 .amount-btn.active { background: rgba(240,200,50,0.12); border-color: rgba(240,200,50,0.45); color: #f0c832; }
-.amount-btn--custom { font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.06em; }
+.amount-btn--custom { font-family: 'DM Sans', sans-serif; font-size: 0.78rem; }
 
-.custom-input { width: 100%; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,200,50,0.25); border-radius: 3px; padding: 0.75rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 1rem; color: #f0ede6; outline: none; transition: border-color 0.2s; }
+.custom-input { width: 100%; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,200,50,0.25); border-radius: 3px; padding: 0.75rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 1rem; color: #f0ede6; outline: none; }
 .custom-input:focus { border-color: rgba(240,200,50,0.5); }
 .custom-input::placeholder { color: rgba(240,237,230,0.2); }
 
-.message-input { width: 100%; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.09); border-radius: 3px; padding: 0.75rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: #f0ede6; outline: none; resize: none; transition: border-color 0.2s; }
+.message-input { width: 100%; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.09); border-radius: 3px; padding: 0.75rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; color: #f0ede6; outline: none; resize: none; }
 .message-input:focus { border-color: rgba(240,237,230,0.2); }
 .message-input::placeholder { color: rgba(240,237,230,0.18); }
 
-/* Donate button */
-.donate-btn { display: flex; align-items: center; justify-content: center; gap: 0.6rem; font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.14em; background: #f0c832; color: #0a0a0f; border: none; border-radius: 3px; padding: 0.9rem 1.5rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.2s, background 0.3s; box-shadow: 0 0 24px rgba(240,200,50,0.35); }
+.donate-btn { display: flex; align-items: center; justify-content: center; gap: 0.6rem; font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.14em; background: #f0c832; color: #0a0a0f; border: none; border-radius: 3px; padding: 0.9rem 1.5rem; cursor: pointer; transition: transform 0.15s, box-shadow 0.2s; box-shadow: 0 0 24px rgba(240,200,50,0.35); }
 .donate-btn:hover:not(:disabled) { transform: scale(1.03); box-shadow: 0 0 36px rgba(240,200,50,0.5); }
 .donate-btn:disabled { background: rgba(240,237,230,0.08); color: rgba(240,237,230,0.25); box-shadow: none; cursor: default; }
-.donate-btn--platform { background: #f0c832; }
-.db-icon { font-size: 1rem; }
+.donate-btn--artist { background: #32c8a0; box-shadow: 0 0 24px rgba(50,200,160,0.35); }
+.donate-btn--artist:hover:not(:disabled) { box-shadow: 0 0 36px rgba(50,200,160,0.5); }
 
-/* Artist search */
 .artist-search-wrap { display: flex; align-items: center; gap: 0.75rem; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); border-radius: 3px; padding: 0.75rem 1rem; transition: border-color 0.2s; }
 .artist-search-wrap.focused { border-color: rgba(240,200,50,0.35); }
-.as-icon { font-size: 1rem; color: #f0c832; opacity: 0.7; flex-shrink: 0; }
+.as-icon { font-size: 1rem; color: #f0c832; opacity: 0.7; }
 .artist-input { flex: 1; background: none; border: none; outline: none; font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: #f0ede6; }
 .artist-input::placeholder { color: rgba(240,237,230,0.22); }
-.as-clear { background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 0.75rem; transition: color 0.2s; }
+.as-clear { background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 0.75rem; }
 .as-clear:hover { color: #ff5a32; }
 
-/* Artist results */
 .artist-results { display: flex; flex-direction: column; gap: 0.4rem; }
-.artist-result { display: flex; align-items: center; gap: 0.85rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 3px; padding: 0.7rem 0.9rem; cursor: pointer; opacity: 0; transform: translateY(5px); animation: slideUp 0.3s ease forwards; animation-delay: calc(var(--i)*40ms); transition: background 0.15s, border-color 0.2s; }
-.artist-result:hover { background: color-mix(in srgb, var(--color) 8%, transparent); border-color: color-mix(in srgb, var(--color) 30%, transparent); }
-.ar-avatar { width: 40px; height: 40px; border-radius: 8px; border: 1px solid; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; }
-.ar-info { flex: 1; display: flex; flex-direction: column; gap: 0.12rem; }
-.ar-name { font-size: 0.9rem; font-weight: 500; color: #f0ede6; }
-.ar-genre { font-size: 0.65rem; color: rgba(240,237,230,0.3); }
+.artist-result { display: flex; align-items: center; gap: 0.85rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 3px; padding: 0.7rem 0.9rem; cursor: pointer; opacity: 0; transform: translateY(5px); animation: slideUp 0.3s ease forwards; animation-delay: calc(var(--i)*40ms); transition: background 0.15s; }
+.artist-result:hover { background: rgba(240,237,230,0.06); }
+.ar-avatar { width: 36px; height: 36px; border-radius: 8px; background: rgba(91,106,255,0.2); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', cursive; font-size: 1.1rem; color: #5b6aff; flex-shrink: 0; }
+.ar-name { flex: 1; font-size: 0.9rem; font-weight: 500; }
 .ar-arrow { font-size: 0.8rem; color: rgba(240,237,230,0.2); }
 
-/* Selected artist */
-.selected-artist { display: flex; align-items: center; gap: 0.85rem; background: color-mix(in srgb, var(--color) 8%, transparent); border: 1px solid color-mix(in srgb, var(--color) 35%, transparent); border-radius: 6px; padding: 0.85rem 1rem; }
-.sa-avatar { width: 46px; height: 46px; border-radius: 8px; border: 1px solid; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; }
+.selected-artist { display: flex; align-items: center; gap: 0.85rem; background: rgba(50,200,160,0.08); border: 1px solid rgba(50,200,160,0.25); border-radius: 6px; padding: 0.85rem 1rem; }
+.sa-avatar { width: 46px; height: 46px; border-radius: 8px; background: rgba(50,200,160,0.2); display: flex; align-items: center; justify-content: center; font-family: 'Bebas Neue', cursive; font-size: 1.4rem; color: #32c8a0; flex-shrink: 0; }
 .sa-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
-.sa-name { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.08em; color: #f0ede6; }
-.sa-genre { font-size: 0.65rem; color: rgba(240,237,230,0.35); }
-.sa-change { background: none; border: 1px solid rgba(240,237,230,0.15); border-radius: 3px; color: rgba(240,237,230,0.4); font-size: 0.7rem; padding: 0.25rem 0.6rem; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
+.sa-name { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.08em; }
+.sa-sub { font-size: 0.65rem; color: rgba(240,237,230,0.3); }
+.sa-change { background: none; border: 1px solid rgba(240,237,230,0.15); border-radius: 3px; color: rgba(240,237,230,0.4); font-size: 0.7rem; padding: 0.25rem 0.6rem; cursor: pointer; transition: all 0.2s; }
 .sa-change:hover { color: #f0ede6; border-color: rgba(240,237,230,0.3); }
 
-/* Success overlay */
-.success-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.7); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
-.success-card { background: #0e0e18; border: 1px solid rgba(240,200,50,0.25); border-radius: 10px; padding: 2.5rem 2rem; max-width: 340px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 0.85rem; align-items: center; animation: successPop 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
+.error-msg { background: rgba(255,90,50,0.1); border: 1px solid rgba(255,90,50,0.3); border-radius: 3px; padding: 0.55rem 1rem; font-size: 0.78rem; color: #ff8060; }
+
+/* Payment overlay */
+.payment-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 1.5rem; }
+.payment-card { background: #0e0e18; border: 1px solid rgba(240,237,230,0.1); border-radius: 12px; padding: 2rem; width: 100%; max-width: 420px; position: relative; animation: successPop 0.3s ease both; }
+.pc-close { position: absolute; top: 1rem; right: 1rem; background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 1rem; transition: color 0.2s; }
+.pc-close:hover { color: #ff5a32; }
+.pc-title { font-family: 'Bebas Neue', cursive; font-size: 1.8rem; letter-spacing: 0.15em; margin-bottom: 0.3rem; }
+.pc-amount { font-size: 0.85rem; color: rgba(240,237,230,0.4); margin-bottom: 1.5rem; }
+.stripe-element { min-height: 120px; margin-bottom: 1.2rem; }
+.confirm-btn { width: 100%; font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.15em; background: #f0c832; color: #0a0a0f; border: none; border-radius: 3px; padding: 0.9rem; cursor: pointer; transition: opacity 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; margin-top: 0.5rem; }
+.confirm-btn:disabled { opacity: 0.5; cursor: default; }
+
+/* Success */
+.success-card { background: #0e0e18; border: 1px solid rgba(240,200,50,0.25); border-radius: 12px; padding: 2.5rem 2rem; max-width: 340px; width: 100%; text-align: center; display: flex; flex-direction: column; gap: 0.85rem; align-items: center; animation: successPop 0.4s cubic-bezier(0.34,1.56,0.64,1) both; }
 .sc-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(240,200,50,0.15); border: 1px solid rgba(240,200,50,0.35); display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #f0c832; }
-.sc-title { font-family: 'Bebas Neue', cursive; font-size: 2rem; letter-spacing: 0.15em; color: #f0ede6; }
+.sc-title { font-family: 'Bebas Neue', cursive; font-size: 2rem; letter-spacing: 0.15em; }
 .sc-text { font-size: 0.85rem; color: rgba(240,237,230,0.55); line-height: 1.6; }
 .sc-text strong { color: #f0ede6; }
-.sc-close { font-family: 'Bebas Neue', cursive; font-size: 0.95rem; letter-spacing: 0.12em; background: rgba(240,200,50,0.1); border: 1px solid rgba(240,200,50,0.3); color: #f0c832; border-radius: 3px; padding: 0.55rem 1.8rem; cursor: pointer; transition: background 0.2s; margin-top: 0.5rem; }
+.sc-close { font-family: 'Bebas Neue', cursive; font-size: 0.95rem; letter-spacing: 0.12em; background: rgba(240,200,50,0.1); border: 1px solid rgba(240,200,50,0.3); color: #f0c832; border-radius: 3px; padding: 0.55rem 1.8rem; cursor: pointer; transition: background 0.2s; }
 .sc-close:hover { background: rgba(240,200,50,0.2); }
 
-/* Transitions */
+.spinner { width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #0a0a0f; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
+
 .panel-enter-active, .panel-leave-active { transition: opacity 0.25s, transform 0.25s; }
 .panel-enter-from { opacity: 0; transform: translateX(12px); }
-.panel-leave-to   { opacity: 0; transform: translateX(-12px); }
+.panel-leave-to { opacity: 0; transform: translateX(-12px); }
 .artist-pop-enter-active { transition: opacity 0.3s, transform 0.3s cubic-bezier(0.34,1.4,0.64,1); }
 .artist-pop-enter-from { opacity: 0; transform: scale(0.95) translateY(6px); }
-.success-fade-enter-active, .success-fade-leave-active { transition: opacity 0.25s; }
-.success-fade-enter-from, .success-fade-leave-to { opacity: 0; }
+.overlay-fade-enter-active, .overlay-fade-leave-active { transition: opacity 0.25s; }
+.overlay-fade-enter-from, .overlay-fade-leave-to { opacity: 0; }
 
 @keyframes fadeDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
 @keyframes successPop { from { opacity: 0; transform: scale(0.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
