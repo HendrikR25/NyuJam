@@ -11,6 +11,7 @@ const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { createClient } = require('@supabase/supabase-js')
 
 const app = express()
+app.set('trust proxy', 1)  // Railway läuft hinter einem Proxy
 app.use(cors({
   origin: [
     'http://localhost:5173',
