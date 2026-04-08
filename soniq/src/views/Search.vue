@@ -95,12 +95,34 @@
     </transition>
 
     <!-- Leerzustand vor Suche -->
-    <transition name="hint-fade">
-      <div class="search-hint" v-if="!searched">
+    <div v-if="!searched">
+      <!-- Suchverlauf -->
+      <transition name="results-fade">
+        <div class="history-area" v-if="searchHistory.length">
+          <div class="history-header">
+            <span class="history-title">Zuletzt gesucht</span>
+            <button class="history-clear-all" @click="clearAllHistory">Alle löschen</button>
+          </div>
+          <div class="history-list">
+            <div
+              v-for="item in searchHistory"
+              :key="item.id"
+              class="history-item"
+              @click="applyHistory(item.query)"
+            >
+              <span class="history-icon">↺</span>
+              <span class="history-query">{{ item.query }}</span>
+              <button class="history-delete" @click.stop="deleteHistory(item.id)">✕</button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <div class="search-hint" v-if="!searchHistory.length">
         <span class="hint-icon">⌇</span>
         <span>Gib etwas ein und drücke <kbd>Enter</kbd></span>
       </div>
-    </transition>
+    </div>
 
   </div>
 </template>
@@ -110,20 +132,73 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore } from '@/stores/player'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const player = usePlayerStore()
+const auth   = useAuthStore()
 
-const inputRef     = ref(null)
-const query        = ref('')
-const lastQuery    = ref('')
-const searched     = ref(false)
-const inputFocused = ref(false)
-const activeTab    = ref('songs')
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
-onMounted(() => {
+const inputRef      = ref(null)
+const query         = ref('')
+const lastQuery     = ref('')
+const searched      = ref(false)
+const inputFocused  = ref(false)
+const activeTab     = ref('songs')
+const searchHistory = ref([])
+
+onMounted(async () => {
   if (!player.songs.length) player.loadSongs()
+  await loadHistory()
 })
+
+async function loadHistory() {
+  if (!auth.isLoggedIn) return
+  try {
+    const res = await fetch(`${BASE_URL}/api/search/history`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
+    })
+    searchHistory.value = await res.json()
+  } catch {}
+}
+
+async function saveHistory(q) {
+  if (!auth.isLoggedIn) return
+  try {
+    await fetch(`${BASE_URL}/api/search/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` },
+      body: JSON.stringify({ query: q }),
+    })
+    await loadHistory()
+  } catch {}
+}
+
+async function deleteHistory(id) {
+  try {
+    await fetch(`${BASE_URL}/api/search/history/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
+    })
+    searchHistory.value = searchHistory.value.filter(h => h.id !== id)
+  } catch {}
+}
+
+async function clearAllHistory() {
+  try {
+    await fetch(`${BASE_URL}/api/search/history`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
+    })
+    searchHistory.value = []
+  } catch {}
+}
+
+function applyHistory(q) {
+  query.value = q
+  doSearch()
+}
 
 const tabs = [
   { id: 'songs',     label: 'Songs',     icon: '♩' },
@@ -173,6 +248,7 @@ function doSearch() {
   searched.value  = false
   setTimeout(() => { searched.value = true }, 50)
   activeTab.value = 'songs'
+  saveHistory(lastQuery.value)
 }
 
 function clearSearch() {
@@ -338,6 +414,19 @@ function goToArtist(item) {
 }
 
 /* ── Hint ── */
+.history-area { width: 100%; max-width: 540px; margin: 1.5rem auto 0; animation: fadeUp 0.3s ease both; }
+.history-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding: 0 0.2rem; }
+.history-title { font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase; color: rgba(240,237,230,0.3); }
+.history-clear-all { background: none; border: none; cursor: pointer; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(240,237,230,0.2); font-family: 'DM Sans', sans-serif; transition: color 0.2s; }
+.history-clear-all:hover { color: #ff5a32; }
+.history-list { display: flex; flex-direction: column; gap: 0.3rem; }
+.history-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.65rem 0.9rem; border-radius: 4px; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
+.history-item:hover { background: rgba(240,237,230,0.06); border-color: rgba(240,237,230,0.12); }
+.history-icon { font-size: 0.75rem; color: rgba(240,237,230,0.25); flex-shrink: 0; }
+.history-query { flex: 1; font-size: 0.88rem; color: rgba(240,237,230,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.history-delete { background: none; border: none; cursor: pointer; font-size: 0.65rem; color: rgba(240,237,230,0.2); padding: 0.2rem; transition: color 0.2s; flex-shrink: 0; }
+.history-delete:hover { color: #ff5a32; }
+
 .search-hint {
   position: relative; z-index: 1;
   display: flex; align-items: center; gap: 0.6rem;

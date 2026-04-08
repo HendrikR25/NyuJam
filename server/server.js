@@ -479,6 +479,46 @@ app.get('/api/conversations', async (req, res) => {
   res.json({ dms, groups: grps })
 })
 
+// ── Search History ─────────────────────────────────────
+app.get('/api/search/history', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.json([])
+  const { data } = await sb.from('search_history').select('id,query,searched_at').eq('user_id', user.id).order('searched_at', { ascending: false }).limit(10)
+  res.json(data || [])
+})
+
+app.post('/api/search/history', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const query = req.body.query?.trim()
+  if (!query) return res.status(400).json({ error: 'Query fehlt' })
+  // Delete duplicate if exists
+  await sb.from('search_history').delete().eq('user_id', user.id).ilike('query', query)
+  // Insert new entry
+  await sb.from('search_history').insert({ user_id: user.id, query })
+  // Keep only last 10
+  const { data: all } = await sb.from('search_history').select('id').eq('user_id', user.id).order('searched_at', { ascending: false })
+  if (all && all.length > 10) {
+    const toDelete = all.slice(10).map(r => r.id)
+    await sb.from('search_history').delete().in('id', toDelete)
+  }
+  res.json({ ok: true })
+})
+
+app.delete('/api/search/history/:id', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('search_history').delete().eq('id', req.params.id).eq('user_id', user.id)
+  res.json({ ok: true })
+})
+
+app.delete('/api/search/history', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('search_history').delete().eq('user_id', user.id)
+  res.json({ ok: true })
+})
+
 // ── Radio Sessions ─────────────────────────────────────
 async function getAllSongs(req) {
   const host  = req.headers.host ?? 'localhost:3001'
