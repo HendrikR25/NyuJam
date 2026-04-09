@@ -14,6 +14,17 @@
         <p class="page-sub">Melde dich an oder erstelle einen Account</p>
       </div>
 
+      <!-- Verification notice -->
+      <transition name="err-fade">
+        <div class="verify-notice-banner" v-if="registerSuccess">
+          <span class="vnb-icon">✉</span>
+          <div class="vnb-text">
+            <strong>Fast geschafft!</strong>
+            <p>Wir haben dir eine Bestätigungs-E-Mail geschickt. Bitte bestätige deine E-Mail-Adresse um deinen Account zu aktivieren.</p>
+          </div>
+        </div>
+      </transition>
+
       <!-- Mode toggle -->
       <div class="mode-tabs">
         <button class="mode-tab" :class="{ active: mode === 'login' }"    @click="mode = 'login';    clearForm()">Anmelden</button>
@@ -319,8 +330,14 @@ async function submitLogin() {
 async function submitRegister() {
   if (!regUsername.value.trim() || !regEmail.value.trim() || !regPassword.value) return
   if (regPassword.value.length < 6) { auth.error = 'Passwort muss mindestens 6 Zeichen haben.'; return }
-  const ok = await auth.register({ username: regUsername.value, email: regEmail.value, password: regPassword.value })
-  if (ok) { clearForm(); registerSuccess.value = true }
+  const result = await auth.register({ username: regUsername.value, email: regEmail.value, password: regPassword.value })
+  if (result === 'verify') {
+    registerSuccess.value = true
+    clearForm()
+    mode.value = 'login'
+  } else if (result === true) {
+    clearForm()
+  }
 }
 
 // ── Profile editing ────────────────────────────────────
@@ -703,10 +720,14 @@ function showFeedback(msg) {
 .avatar-wrap:hover .avatar-overlay { opacity: 1; }
 .profile-username { font-family: 'Bebas Neue', cursive; font-size: 1.4rem; letter-spacing: 0.1em; color: #f0ede6; }
 .profile-email { font-size: 0.72rem; color: rgba(240,237,230,0.3); margin-top: 0.1rem; display: block; }
+.verify-notice-banner { position: relative; z-index: 1; width: 100%; max-width: 420px; background: rgba(91,106,255,0.1); border: 1px solid rgba(91,106,255,0.3); border-radius: 6px; padding: 1rem 1.2rem; display: flex; gap: 0.85rem; align-items: flex-start; margin-bottom: 0.5rem; }
+.vnb-icon { font-size: 1.4rem; flex-shrink: 0; margin-top: 0.1rem; }
+.vnb-text { display: flex; flex-direction: column; gap: 0.3rem; }
+.vnb-text strong { font-size: 0.88rem; color: #f0ede6; }
+.vnb-text p { font-size: 0.78rem; color: rgba(240,237,230,0.5); line-height: 1.6; }
 .forgot-btn { background: none; border: none; color: rgba(240,237,230,0.3); font-family: 'DM Sans', sans-serif; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0; text-align: center; transition: color 0.2s; }
 .forgot-btn:hover { color: rgba(240,237,230,0.6); }
 .form-hint { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.6; }
-.verify-notice { line-height: 1.6; }
 .section-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); padding-bottom: 0.25rem; border-bottom: 1px solid rgba(240,237,230,0.06); }
 .hidden { display: none; }
 

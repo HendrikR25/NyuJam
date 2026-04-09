@@ -26,6 +26,8 @@ export const useAuthStore = defineStore('auth', () => {
       })
       const data = await res.json()
       if (!res.ok) { error.value = data.error; return false }
+      // Don't auto-login — user must verify email first
+      if (data.needsVerification) return 'verify'
       user.value  = data.user
       token.value = data.token
       persist()
