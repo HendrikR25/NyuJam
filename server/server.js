@@ -385,6 +385,12 @@ app.patch('/api/auth/profile', async (req, res) => {
   res.json({ user: safeUser(data) })
 })
 
+app.get('/api/users/:id', async (req, res) => {
+  const { data } = await sb.from('users').select('id,username,avatar').eq('id', req.params.id).single()
+  if (!data) return res.status(404).json({ error: 'Not found' })
+  res.json(data)
+})
+
 // ── Friends ────────────────────────────────────────────
 app.get('/api/friends', async (req, res) => {
   const me = await getUserFromToken(req)
@@ -816,7 +822,8 @@ app.post('/api/radio/sessions/:id/vote', async (req, res) => {
     chat_messages = [...chat_messages, { id: Date.now().toString(), system: true, text: `⏭ Song übersprungen (${needed}/${s.listeners.length} Stimmen)`, createdAt: new Date().toISOString() }].slice(-100)
     skipped = true
   }
-  const { data } = await sb.from('radio_sessions').update({ votes: skipped ? [] : votes, current_song, queue, chat_messages, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+  const song_started_at = skipped ? new Date().toISOString() : (s.song_started_at || new Date().toISOString())
+  const { data } = await sb.from('radio_sessions').update({ votes: skipped ? [] : votes, current_song, queue, chat_messages, song_started_at, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
   res.json({ ...data, skipped })
 })
 
@@ -839,11 +846,15 @@ app.post('/api/radio/sessions/:id/queue', async (req, res) => {
   const song  = req.body.song
   if (!song)  return res.status(400).json({ error: 'Song fehlt' })
   const queue = [...(s.queue || []), song]
-  // If no current song, set this as current
   let current_song = s.current_song
   let newQueue     = queue
-  if (!current_song) { current_song = queue[0]; newQueue = queue.slice(1) }
-  const { data } = await sb.from('radio_sessions').update({ queue: newQueue, current_song, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+  let song_started_at = s.song_started_at || null
+  if (!current_song) {
+    current_song    = queue[0]
+    newQueue        = queue.slice(1)
+    song_started_at = new Date().toISOString()
+  }
+  const { data } = await sb.from('radio_sessions').update({ queue: newQueue, current_song, song_started_at, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
   res.json(data)
 })
 
@@ -852,10 +863,11 @@ app.post('/api/radio/sessions/:id/next', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: s } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
   if (!s || s.host_id !== me.id) return res.status(403).json({ error: 'Nur der Host kann skippen' })
-  const queue = s.queue || []
+  const queue        = s.queue || []
   const current_song = queue.length > 0 ? queue[0] : s.current_song
   const newQueue     = queue.length > 0 ? queue.slice(1) : []
-  const { data } = await sb.from('radio_sessions').update({ current_song, queue: newQueue, votes: [], updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+  const song_started_at = new Date().toISOString()
+  const { data } = await sb.from('radio_sessions').update({ current_song, queue: newQueue, votes: [], song_started_at, updated_at: song_started_at }).eq('id', req.params.id).select().single()
   res.json(data)
 })
 
