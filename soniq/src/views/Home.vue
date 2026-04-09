@@ -4,13 +4,7 @@
     <div class="bg-glow"></div>
 
     <!-- Werbebanner oben -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top">
-        <!-- Hier Werbe-Component oder Skript einfügen -->
-        <div class="ad-placeholder">Advertisement</div>
-      </slot>
-    </div>
+    <AdBanner ad-slot="1918440727" />
 
     <header class="header">
       <div class="logo">
@@ -71,6 +65,7 @@
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'

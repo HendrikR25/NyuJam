@@ -3,7 +3,7 @@
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
 
-    <div class="ad-banner"><span class="ad-label">Anzeige</span><slot name="ad-top"><div class="ad-placeholder">Advertisement</div></slot></div>
+    <AdBanner ad-slot="1918440727" />
 
     <!-- Session view -->
     <div class="session-view" v-if="session">
@@ -157,6 +157,7 @@
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore }   from '@/stores/auth'

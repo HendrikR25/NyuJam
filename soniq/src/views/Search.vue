@@ -4,12 +4,7 @@
     <div class="bg-glow"></div>
 
     <!-- Werbebanner oben -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top">
-        <div class="ad-placeholder">Advertisement</div>
-      </slot>
-    </div>
+    <AdBanner ad-slot="1918440727" />
 
     <!-- Zurück-Button -->
     <NavBar back-to="/" />
@@ -128,6 +123,7 @@
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'

@@ -6,10 +6,7 @@
     <div class="hero-backdrop" :style="{ background: `linear-gradient(180deg, ${artist.color}30 0%, #08090f 65%)` }"></div>
 
     <!-- Ad Banner -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top"><div class="ad-placeholder">Advertisement</div></slot>
-    </div>
+    <AdBanner ad-slot="1918440727" />
 
     <!-- Back -->
     <NavBar back-label="← Suche" back-to="/search" />
@@ -125,6 +122,7 @@
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
