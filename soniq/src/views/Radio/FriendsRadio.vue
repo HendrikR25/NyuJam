@@ -186,8 +186,23 @@ async function loadSessions() {
   loadingSessions.value = true
   try {
     const res  = await fetch(`${BASE_URL}/api/radio/sessions`, { headers: authHeader() })
-    sessions.value = await res.json()
+    const data = await res.json()
+    sessions.value = (Array.isArray(data) ? data : []).map(mapSession)
   } finally { loadingSessions.value = false }
+}
+
+function mapSession(s) {
+  if (!s) return null
+  return {
+    ...s,
+    currentSong:  s.current_song  || s.currentSong  || null,
+    chatMessages: s.chat_messages || s.chatMessages  || [],
+    hostId:       s.host_id       || s.hostId        || null,
+    hostName:     s.host_name     || s.hostName      || '',
+    hostAvatar:   s.host_avatar   || s.hostAvatar    || null,
+    isPublic:     s.is_public     ?? s.isPublic      ?? true,
+    members:      s.listeners     || s.members       || [],
+  }
 }
 
 // ── Session management ─────────────────────────────────
@@ -200,7 +215,7 @@ async function createSession() {
       body: JSON.stringify({ name: newSessionName.value.trim() || null }),
     })
     const s = await res.json()
-    enterSession(s)
+    enterSession(mapSession(s))
   } finally { creating.value = false }
 }
 
@@ -209,15 +224,14 @@ async function joinSession(id) {
     method: 'POST', headers: authHeader(),
   })
   const s = await res.json()
-  enterSession(s)
+  enterSession(mapSession(s))
 }
 
 function enterSession(s) {
   session.value = s
   hasVoted.value = false
-  addSystemMsg(`Du bist der Session „${s.name}" beigetreten`)
+  addSystemMsg(`Du bist der Session beigetreten`)
   if (s.currentSong) playCurrent()
-  // Poll every 3s for session updates
   clearInterval(pollTimer)
   pollTimer = setInterval(pollSession, 3000)
 }
@@ -227,8 +241,7 @@ async function pollSession() {
   try {
     const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}`, { headers: authHeader() })
     if (!res.ok) { session.value = null; clearInterval(pollTimer); return }
-    const updated = await res.json()
-    // Auto-play if song changed
+    const updated = mapSession(await res.json())
     if (updated.currentSong?.id !== session.value.currentSong?.id) {
       session.value = updated
       hasVoted.value = false
