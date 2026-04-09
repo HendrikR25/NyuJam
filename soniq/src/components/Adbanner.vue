@@ -64,4 +64,4 @@ onMounted(() => {
 .adsbygoogle {
   max-width: 728px;
 }
-</style>
+</style> 
