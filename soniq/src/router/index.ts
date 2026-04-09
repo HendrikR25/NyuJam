@@ -92,6 +92,8 @@ const router = createRouter({
       name: 'upload',
       component: Upload,
     },
+    { path: '/verify-email',    component: () => import('@/views/VerifyEmail.vue') },
+    { path: '/reset-password',  component: () => import('@/views/ResetPassword.vue') },
   ],
 })
 
