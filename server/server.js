@@ -8,7 +8,19 @@ const multer  = require('multer')
 const bcrypt  = require('bcryptjs')
 const rateLimit = require('express-rate-limit')
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY)
+const { Resend } = require('resend')
 const { createClient } = require('@supabase/supabase-js')
+
+const resend = new Resend(process.env.RESEND_API_KEY)
+const FROM_EMAIL = 'noreply@nyujam.com'
+
+async function sendEmail({ to, subject, html }) {
+  try {
+    await resend.emails.send({ from: FROM_EMAIL, to, subject, html })
+  } catch (e) {
+    console.error('Email error:', e.message)
+  }
+}
 
 const app = express()
 app.set('trust proxy', 1)  // Railway läuft hinter einem Proxy
@@ -408,12 +420,97 @@ app.post('/api/auth/register', async (req, res) => {
   if (existU) return res.status(409).json({ error: 'Benutzername bereits vergeben.' })
   const { data: existE } = await sb.from('users').select('id').eq('email', email.trim().toLowerCase()).single()
   if (existE) return res.status(409).json({ error: 'E-Mail bereits registriert.' })
-  const id    = Date.now().toString()
-  const token = simpleToken(id)
+  const id             = Date.now().toString()
+  const token          = simpleToken(id)
+  const verify_token   = simpleToken(id + 'verify' + Math.random())
   const hashedPassword = await bcrypt.hash(password, 10)
-  const { data, error } = await sb.from('users').insert({ id, username: username.trim(), email: email.trim().toLowerCase(), password: hashedPassword, bio: '', is_public: true, is_admin: false, token }).select().single()
+  const { data, error } = await sb.from('users').insert({
+    id, username: username.trim(), email: email.trim().toLowerCase(),
+    password: hashedPassword, bio: '', is_public: true, is_admin: false,
+    token, is_verified: false, verify_token,
+  }).select().single()
   if (error) return res.status(500).json({ error: error.message })
-  res.status(201).json({ user: safeUser(data), token })
+
+  // Send verification email
+  const verifyUrl = `${process.env.FRONTEND_URL || 'https://nyujam.com'}/verify-email?token=${verify_token}`
+  await sendEmail({
+    to: email.trim(),
+    subject: 'NyuJam — E-Mail bestätigen',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#0a0a0f;color:#f0ede6;padding:2rem;border-radius:8px">
+        <h1 style="font-size:1.5rem;letter-spacing:0.1em;margin-bottom:0.5rem">◈ NYUJAM</h1>
+        <p style="color:rgba(240,237,230,0.6);margin-bottom:1.5rem">Willkommen, <strong>${username.trim()}</strong>!</p>
+        <p style="margin-bottom:1.5rem">Bitte bestätige deine E-Mail-Adresse um deinen Account zu aktivieren:</p>
+        <a href="${verifyUrl}" style="display:inline-block;background:#5b6aff;color:white;padding:0.75rem 2rem;border-radius:4px;text-decoration:none;font-weight:600">E-Mail bestätigen</a>
+        <p style="margin-top:1.5rem;font-size:0.75rem;color:rgba(240,237,230,0.3)">Dieser Link ist 24 Stunden gültig. Falls du dich nicht registriert hast, ignoriere diese E-Mail.</p>
+      </div>
+    `,
+  })
+
+  res.status(201).json({ user: safeUser(data), token, needsVerification: true })
+})
+
+// GET /api/auth/verify-email?token=...
+app.get('/api/auth/verify-email', async (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).json({ error: 'Token fehlt' })
+  const { data: user } = await sb.from('users').select('*').eq('verify_token', token).single()
+  if (!user) return res.status(400).json({ error: 'Ungültiger oder abgelaufener Link.' })
+  await sb.from('users').update({ is_verified: true, verify_token: null }).eq('id', user.id)
+  res.json({ ok: true, message: 'E-Mail bestätigt! Du kannst dich jetzt anmelden.' })
+})
+
+// POST /api/auth/forgot-password
+app.post('/api/auth/forgot-password', async (req, res) => {
+  const { email } = req.body
+  if (!email) return res.status(400).json({ error: 'E-Mail fehlt' })
+  const { data: user } = await sb.from('users').select('*').ilike('email', email.trim()).single()
+  // Always return success to prevent email enumeration
+  if (!user) return res.json({ ok: true })
+  const reset_token         = simpleToken(user.id + 'reset' + Math.random())
+  const reset_token_expires = new Date(Date.now() + 60 * 60 * 1000).toISOString() // 1 hour
+  await sb.from('users').update({ reset_token, reset_token_expires }).eq('id', user.id)
+  const resetUrl = `${process.env.FRONTEND_URL || 'https://nyujam.com'}/reset-password?token=${reset_token}`
+  await sendEmail({
+    to: user.email,
+    subject: 'NyuJam — Passwort zurücksetzen',
+    html: `
+      <div style="font-family:sans-serif;max-width:480px;margin:0 auto;background:#0a0a0f;color:#f0ede6;padding:2rem;border-radius:8px">
+        <h1 style="font-size:1.5rem;letter-spacing:0.1em;margin-bottom:0.5rem">◈ NYUJAM</h1>
+        <p style="margin-bottom:1.5rem">Du hast eine Passwort-Zurücksetzung angefordert. Klicke auf den Link:</p>
+        <a href="${resetUrl}" style="display:inline-block;background:#f0c832;color:#0a0a0f;padding:0.75rem 2rem;border-radius:4px;text-decoration:none;font-weight:600">Passwort zurücksetzen</a>
+        <p style="margin-top:1.5rem;font-size:0.75rem;color:rgba(240,237,230,0.3)">Dieser Link ist 1 Stunde gültig. Falls du kein Zurücksetzen angefordert hast, ignoriere diese E-Mail.</p>
+      </div>
+    `,
+  })
+  res.json({ ok: true })
+})
+
+// POST /api/auth/reset-password
+app.post('/api/auth/reset-password', async (req, res) => {
+  const { token, password } = req.body
+  if (!token || !password) return res.status(400).json({ error: 'Token und Passwort erforderlich' })
+  if (password.length < 6) return res.status(400).json({ error: 'Passwort muss mindestens 6 Zeichen haben.' })
+  const { data: user } = await sb.from('users').select('*').eq('reset_token', token).single()
+  if (!user) return res.status(400).json({ error: 'Ungültiger oder abgelaufener Link.' })
+  if (new Date(user.reset_token_expires) < new Date()) return res.status(400).json({ error: 'Link abgelaufen. Bitte erneut anfordern.' })
+  const hashedPassword = await bcrypt.hash(password, 10)
+  await sb.from('users').update({ password: hashedPassword, reset_token: null, reset_token_expires: null }).eq('id', user.id)
+  res.json({ ok: true, message: 'Passwort erfolgreich geändert.' })
+})
+
+// POST /api/auth/change-password (logged in)
+app.post('/api/auth/change-password', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt.' })
+  const { currentPassword, newPassword } = req.body
+  if (!currentPassword || !newPassword) return res.status(400).json({ error: 'Alle Felder erforderlich.' })
+  if (newPassword.length < 6) return res.status(400).json({ error: 'Neues Passwort muss mindestens 6 Zeichen haben.' })
+  const match = await bcrypt.compare(currentPassword, user.password)
+  if (!match) return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
+  const hashedPassword = await bcrypt.hash(newPassword, 10)
+  await sb.from('users').update({ password: hashedPassword }).eq('id', user.id)
+  res.json({ ok: true })
 })
 
 app.post('/api/auth/login', async (req, res) => {
@@ -425,6 +522,7 @@ app.post('/api/auth/login', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
   const passwordMatch = await bcrypt.compare(password, user.password)
   if (!passwordMatch) return res.status(401).json({ error: 'Ungültige Anmeldedaten.' })
+  if (user.is_verified === false) return res.status(403).json({ error: 'Bitte bestätige zuerst deine E-Mail-Adresse.', needsVerification: true })
   const token = simpleToken(user.id)
   await sb.from('users').update({ token }).eq('id', user.id)
   user.token = token
