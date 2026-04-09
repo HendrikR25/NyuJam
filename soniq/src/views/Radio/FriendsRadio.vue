@@ -85,8 +85,8 @@
       <!-- Members -->
       <div class="sv-members">
         <div v-for="uid in (session.listeners || [])" :key="uid" class="member-chip">
-          <div class="mc-avatar" :style="{ background: avatarColor(uid) }">
-            <span>{{ uid.slice(0,2).toUpperCase() }}</span>
+          <div class="mc-avatar" :style="{ background: avatarColor(String(uid)) }">
+            <span>{{ String(uid).slice(0,2).toUpperCase() }}</span>
           </div>
           <span class="mc-host" v-if="uid === session.host_id">♛</span>
         </div>
@@ -345,174 +345,12 @@ async function sendChat() {
 
 // ── Helpers ────────────────────────────────────────────
 const avatarColors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
-function avatarColor(name) { return avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length] }
+function avatarColor(name) {
+  if (!name) return avatarColors[0]
+  return avatarColors[String(name).charCodeAt(0) % avatarColors.length]
+}
 </script>
 
-const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-
-function authHeader() {
-  const token = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-}
-
-// ── State ──────────────────────────────────────────────
-const sessions        = ref([])
-const session         = ref(null)
-const radioSongs      = ref([])
-const loadingSessions = ref(false)
-const creating        = ref(false)
-const newSessionName  = ref('')
-const chatMessages    = ref([])
-const chatInput       = ref('')
-const chatRef         = ref(null)
-const hasVoted        = ref(false)
-
-let pollTimer = null
-
-const isHost      = computed(() => session.value?.hostId === auth.user?.id)
-const voteCount   = computed(() => Object.keys(session.value?.votes || {}).length)
-const votesNeeded = computed(() => Math.ceil((session.value?.members.length || 1) / 2))
-
-// ── Load ───────────────────────────────────────────────
-onMounted(async () => {
-  const [songsRes] = await Promise.all([
-    fetch(`${BASE_URL}/api/songs/all`),
-    loadSessions(),
-  ])
-  radioSongs.value = await songsRes.json()
-})
-onUnmounted(() => clearInterval(pollTimer))
-
-async function loadSessions() {
-  if (!auth.isLoggedIn) return
-  loadingSessions.value = true
-  try {
-    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, { headers: authHeader() })
-    const data = await res.json()
-    sessions.value = (Array.isArray(data) ? data : []).map(mapSession)
-  } finally { loadingSessions.value = false }
-}
-
-function mapSession(s) {
-  if (!s) return null
-  return {
-    ...s,
-    currentSong:  s.current_song  || s.currentSong  || null,
-    chatMessages: s.chat_messages || s.chatMessages  || [],
-    hostId:       s.host_id       || s.hostId        || null,
-    hostName:     s.host_name     || s.hostName      || '',
-    hostAvatar:   s.host_avatar   || s.hostAvatar    || null,
-    isPublic:     s.is_public     ?? s.isPublic      ?? true,
-    members:      s.listeners     || s.members       || [],
-  }
-}
-
-// ── Session management ─────────────────────────────────
-async function createSession() {
-  if (creating.value) return
-  creating.value = true
-  try {
-    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, {
-      method: 'POST', headers: authHeader(),
-      body: JSON.stringify({ name: newSessionName.value.trim() || null }),
-    })
-    const s = await res.json()
-    enterSession(mapSession(s))
-  } finally { creating.value = false }
-}
-
-async function joinSession(id) {
-  const res = await fetch(`${BASE_URL}/api/radio/sessions/${id}/join`, {
-    method: 'POST', headers: authHeader(),
-  })
-  const s = await res.json()
-  enterSession(mapSession(s))
-}
-
-function enterSession(s) {
-  session.value = s
-  hasVoted.value = false
-  addSystemMsg(`Du bist der Session beigetreten`)
-  if (s.currentSong) playCurrent()
-  clearInterval(pollTimer)
-  pollTimer = setInterval(pollSession, 3000)
-}
-
-async function pollSession() {
-  if (!session.value) return
-  try {
-    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}`, { headers: authHeader() })
-    if (!res.ok) { session.value = null; clearInterval(pollTimer); return }
-    const updated = mapSession(await res.json())
-    if (updated.currentSong?.id !== session.value.currentSong?.id) {
-      session.value = updated
-      hasVoted.value = false
-      playCurrent()
-      addSystemMsg(`▶ ${updated.currentSong?.name} — ${updated.currentSong?.artist}`)
-    } else {
-      session.value = updated
-    }
-  } catch { /* offline */ }
-}
-
-async function leaveSession() {
-  if (!session.value) return
-  clearInterval(pollTimer)
-  await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/leave`, {
-    method: 'POST', headers: authHeader(),
-  })
-  player.togglePlay?.()
-  session.value = null
-  chatMessages.value = []
-}
-
-// ── Playback ───────────────────────────────────────────
-function playCurrent() {
-  if (!session.value?.currentSong) return
-  const song = session.value.currentSong
-  // Build song object player understands
-  player.play({ id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url })
-}
-
-async function voteSkip() {
-  if (hasVoted.value || !session.value) return
-  hasVoted.value = true
-  const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/vote`, {
-    method: 'POST', headers: authHeader(),
-  })
-  session.value = await res.json()
-}
-
-async function hostNext() {
-  if (!session.value) return
-  const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/next`, {
-    method: 'POST', headers: authHeader(),
-  })
-  session.value = await res.json()
-  playCurrent()
-  addSystemMsg(`⏭ ${session.value.currentSong?.name} — ${session.value.currentSong?.artist}`)
-}
-
-// ── Chat (local only — stored with social messages) ────
-function addSystemMsg(text) {
-  chatMessages.value.push({ id: Date.now(), system: true, text })
-  nextTick(() => { if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight })
-}
-
-async function sendChat() {
-  const text = chatInput.value.trim()
-  if (!text || !session.value) return
-  chatInput.value = ''
-  chatMessages.value.push({ id: Date.now(), fromId: auth.user?.id, fromName: auth.user?.username, text })
-  nextTick(() => { if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight })
-  // Also save to social messages as group message if session has group
-  await social.sendMessage({ groupId: `radio_${session.value.id}`, text })
-}
-
-// ── Helpers ────────────────────────────────────────────
-const avatarColors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
-function avatarColor(name) { return avatarColors[name.charCodeAt(0) % avatarColors.length] }
-</script>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500&display=swap');
