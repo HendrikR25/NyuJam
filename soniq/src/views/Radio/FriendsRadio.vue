@@ -174,7 +174,7 @@ const votesNeeded = computed(() => Math.ceil((session.value?.members.length || 1
 // ── Load ───────────────────────────────────────────────
 onMounted(async () => {
   const [songsRes] = await Promise.all([
-    fetch(`${BASE_URL}/api/radio/songs`),
+    fetch(`${BASE_URL}/api/songs/all`),
     loadSessions(),
   ])
   radioSongs.value = await songsRes.json()
