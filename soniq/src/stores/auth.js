@@ -16,6 +16,22 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('nyujam_token', token.value || '')
   }
 
+  function clearSession() {
+    user.value  = null
+    token.value = null
+    localStorage.removeItem('nyujam_user')
+    localStorage.removeItem('nyujam_token')
+  }
+
+  // Validate token on startup — auto-logout if user no longer exists
+  if (token.value) {
+    fetch(`${BASE_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${token.value}` },
+    }).then(res => {
+      if (!res.ok) clearSession()
+    }).catch(() => {})
+  }
+
   async function register({ username, email, password }) {
     loading.value = true; error.value = null
     try {
@@ -72,11 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function logout() {
-    user.value  = null
-    token.value = null
-    localStorage.removeItem('nyujam_user')
-    localStorage.removeItem('nyujam_token')
-    // Clear user-specific data — import dynamically to avoid circular deps
+    clearSession()
     import('@/stores/playlists').then(m => m.usePlaylistsStore().clear())
   }
 

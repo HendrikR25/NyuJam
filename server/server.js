@@ -412,6 +412,12 @@ app.delete('/api/favorites/:id', async (req, res) => {
 })
 
 // ── Auth ───────────────────────────────────────────────
+app.get('/api/auth/me', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  res.json({ user: safeUser(user) })
+})
+
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password } = req.body
   if (!username?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Alle Felder sind erforderlich.' })
