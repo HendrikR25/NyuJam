@@ -4,12 +4,7 @@
     <div class="bg-glow" :style="glowStyle"></div>
 
     <!-- Ad Banner -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top">
-        <div class="ad-placeholder">Advertisement</div>
-      </slot>
-    </div>
+    <AdBanner ad-slot="1918440727" />
 
     <!-- Back / Breadcrumb -->
     <div class="breadcrumb">
@@ -162,6 +157,7 @@
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
