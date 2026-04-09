@@ -22,9 +22,28 @@
         <div class="add-input-wrap" :class="{ focused: addFocused }">
           <span class="add-icon">◎</span>
           <input v-model="searchQuery" class="add-input" type="text" placeholder="Benutzername suchen..."
-            @focus="addFocused = true" @blur="addFocused = false" @keydown.enter="sendRequest" />
+            @focus="addFocused = true" @blur="hideSuggestions" @keydown.enter="sendRequest"
+            @input="onSearchInput" @keydown.down.prevent="selectNext" @keydown.up.prevent="selectPrev"
+            @keydown.escape="suggestions = []" autocomplete="off" />
           <button class="add-send-btn" :class="{ ready: searchQuery.trim() }" @click="sendRequest">+ Hinzufügen</button>
         </div>
+        <!-- Suggestions dropdown -->
+        <transition name="sugg-fade">
+          <div class="suggestions" v-if="suggestions.length && addFocused">
+            <div
+              v-for="(s, i) in suggestions" :key="s.id"
+              class="suggestion-item" :class="{ active: i === selectedIdx }"
+              @mousedown.prevent="pickSuggestion(s)"
+            >
+              <div class="si-avatar" :style="{ background: avatarBg(s.username) }">
+                <img v-if="s.avatar" :src="s.avatar" class="si-avatar-img" />
+                <span v-else>{{ s.username.slice(0,2).toUpperCase() }}</span>
+              </div>
+              <span class="si-name">{{ s.username }}</span>
+              <span class="si-hint">→</span>
+            </div>
+          </div>
+        </transition>
         <transition name="req-fade">
           <div class="req-feedback" :class="feedbackType" v-if="feedback">{{ feedback }}</div>
         </transition>
@@ -90,18 +109,64 @@ const router = useRouter()
 const social = useSocialStore()
 const auth   = useAuthStore()
 
+const BASE_URL   = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 const searchQuery = ref('')
 const addFocused  = ref(false)
 const feedback    = ref('')
 const feedbackType = ref('success')
-let feedbackTimer = null
+const suggestions  = ref([])
+const selectedIdx  = ref(-1)
+let feedbackTimer  = null
+let searchTimer    = null
+
+function avatarBg(username) {
+  const colors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
+  return colors[username.charCodeAt(0) % colors.length]
+}
+
+function onSearchInput() {
+  selectedIdx.value = -1
+  clearTimeout(searchTimer)
+  const q = searchQuery.value.trim()
+  if (q.length < 2) { suggestions.value = []; return }
+  searchTimer = setTimeout(async () => {
+    try {
+      const res  = await fetch(`${BASE_URL}/api/users/search?q=${encodeURIComponent(q)}`)
+      const data = await res.json()
+      // Filter out already-friends and self
+      const friendIds = new Set(social.friends.map(f => f.id))
+      suggestions.value = data.filter(u => u.id !== auth.user?.id && !friendIds.has(u.id))
+    } catch {}
+  }, 250)
+}
+
+function pickSuggestion(s) {
+  searchQuery.value = s.username
+  suggestions.value = []
+  sendRequest()
+}
+
+function hideSuggestions() {
+  addFocused.value = false
+  setTimeout(() => { suggestions.value = [] }, 150)
+}
+
+function selectNext() {
+  if (!suggestions.value.length) return
+  selectedIdx.value = (selectedIdx.value + 1) % suggestions.value.length
+  searchQuery.value = suggestions.value[selectedIdx.value].username
+}
+
+function selectPrev() {
+  if (!suggestions.value.length) return
+  selectedIdx.value = (selectedIdx.value - 1 + suggestions.value.length) % suggestions.value.length
+  searchQuery.value = suggestions.value[selectedIdx.value].username
+}
 
 onMounted(() => { if (auth.isLoggedIn) social.loadFriends() })
 
 function avatarStyle(u) {
-  const colors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
-  const i = u.username.charCodeAt(0) % colors.length
-  return { background: colors[i] }
+  return { background: avatarBg(u.username) }
 }
 
 async function sendRequest() {
@@ -151,6 +216,16 @@ function showFeedback(msg, type = 'success') {
 .req-feedback { font-size: 0.75rem; letter-spacing: 0.04em; padding-left: 0.25rem; }
 .req-feedback.success { color: #32c8a0; }
 .req-feedback.error   { color: #ff5a32; }
+
+.suggestions { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: #0e0e1a; border: 1px solid rgba(240,237,230,0.12); border-radius: 6px; overflow: hidden; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+.suggestion-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.9rem; cursor: pointer; transition: background 0.15s; }
+.suggestion-item:hover, .suggestion-item.active { background: rgba(91,106,255,0.1); }
+.si-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 600; color: white; flex-shrink: 0; overflow: hidden; }
+.si-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.si-name { flex: 1; font-size: 0.88rem; color: #f0ede6; }
+.si-hint { font-size: 0.7rem; color: rgba(240,237,230,0.2); }
+.sugg-fade-enter-active, .sugg-fade-leave-active { transition: opacity 0.15s, transform 0.15s; }
+.sugg-fade-enter-from, .sugg-fade-leave-to { opacity: 0; transform: translateY(-4px); }
 .section { position: relative; z-index: 1; width: 100%; max-width: 480px; margin-bottom: 2rem; }
 .section-title { font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.18em; color: rgba(240,237,230,0.35); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
 .badge { background: rgba(255,90,50,0.2); border: 1px solid rgba(255,90,50,0.35); color: #ff5a32; font-family: 'DM Sans', sans-serif; font-size: 0.65rem; border-radius: 99px; padding: 0.05rem 0.45rem; font-weight: 600; }

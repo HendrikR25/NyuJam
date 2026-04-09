@@ -548,6 +548,16 @@ app.patch('/api/auth/profile', async (req, res) => {
   res.json({ user: safeUser(data) })
 })
 
+app.get('/api/users/search', async (req, res) => {
+  const q = req.query.q?.trim()
+  if (!q || q.length < 2) return res.json([])
+  const { data } = await sb.from('users')
+    .select('id, username, avatar')
+    .ilike('username', `%${q}%`)
+    .limit(6)
+  res.json(data || [])
+})
+
 app.get('/api/users/:id', async (req, res) => {
   const { data } = await sb.from('users').select('id,username,avatar').eq('id', req.params.id).single()
   if (!data) return res.status(404).json({ error: 'Not found' })
