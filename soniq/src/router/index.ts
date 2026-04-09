@@ -94,7 +94,7 @@ const router = createRouter({
     },
     { path: '/verify-email',    component: () => import('@/views/VerifyEmail.vue') },
     { path: '/reset-password',  component: () => import('@/views/ResetPassword.vue') },
-    { path: '/about', component: () => import('@/views/About.vue') }
+    { path: '/about', component: () => import('@/views/About.vue') },
 })
 
 export default router
