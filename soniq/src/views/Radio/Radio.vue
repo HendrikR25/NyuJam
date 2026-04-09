@@ -127,29 +127,76 @@
       </p>
     </div>
 
-    <!-- Now Playing -->
+    <!-- Country Radio Player -->
     <transition name="np-swap" mode="out-in">
-      <div class="now-playing-card" :key="currentStation.id" :style="{ '--accent': currentStation.color }">
-        <div class="npc-cover" :style="{ background: currentStation.color + '22', borderColor: currentStation.color + '44' }">
-          <img v-if="currentRadioSong?.cover" :src="currentRadioSong.cover" class="npc-cover-img" />
-          <span v-else class="npc-icon">{{ currentStation.icon }}</span>
-          <span class="npc-wave" v-if="radioPlaying && player.isPlaying"><span></span><span></span><span></span><span></span></span>
+
+      <!-- No country selected -->
+      <div class="now-playing-card" key="global" v-if="!activeCountry" :style="{ '--accent': '#5b6aff' }">
+        <div class="npc-cover" style="background:rgba(91,106,255,0.1);border-color:rgba(91,106,255,0.3)">
+          <span class="npc-icon">🌍</span>
         </div>
         <div class="npc-info">
-          <span class="npc-station">{{ currentStation.station }}</span>
-          <span class="npc-song">{{ currentRadioSong?.name || currentStation.song }}</span>
-          <span class="npc-artist">{{ currentRadioSong?.artist || currentStation.artist }}</span>
+          <span class="npc-station">NyuJam Radio</span>
+          <span class="npc-song">Wähle ein Land auf der Karte</span>
+          <span class="npc-artist">um das Länder-Radio zu starten</span>
+        </div>
+      </div>
+
+      <!-- Off air -->
+      <div class="now-playing-card" key="offair" v-else-if="!countryRadio.onAir" :style="{ '--accent': '#ff5a32' }">
+        <div class="npc-cover" style="background:rgba(255,90,50,0.08);border-color:rgba(255,90,50,0.2)">
+          <span class="npc-icon">🌙</span>
+        </div>
+        <div class="npc-info">
+          <span class="npc-station">{{ activeCountry.name }} Radio</span>
+          <span class="npc-song">Sendeende · 22:00 – 08:00</span>
+          <span class="npc-artist">Radio startet wieder um 08:00 Uhr</span>
+        </div>
+        <!-- Rankings -->
+        <div class="rankings-wrap" v-if="countryRadio.rankings?.length">
+          <div class="rankings-title">
+            {{ countryRadio.weekend ? '🏆 Wochen-Top 50' : '🏆 Tages-Top 50' }}
+          </div>
+          <div class="rankings-list">
+            <div v-for="(r, i) in countryRadio.rankings" :key="r.song_id" class="rank-item" @click="playRankSong(r)">
+              <span class="rank-nr">{{ i + 1 }}</span>
+              <div class="rank-cover">
+                <img v-if="r.cover_url" :src="r.cover_url" class="rank-cover-img" />
+                <span v-else>♩</span>
+              </div>
+              <div class="rank-info">
+                <span class="rank-name">{{ r.song_name }}</span>
+                <span class="rank-artist">{{ r.artist }}</span>
+              </div>
+              <span class="rank-pct">{{ r.like_pct }}%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- On air -->
+      <div class="now-playing-card" key="onair" v-else :style="{ '--accent': '#5b6aff' }">
+        <div class="npc-cover" :style="{ background: 'rgba(91,106,255,0.1)', borderColor: 'rgba(91,106,255,0.3)' }">
+          <img v-if="countryRadio.currentSong?.cover" :src="countryRadio.currentSong.cover" class="npc-cover-img" />
+          <span v-else class="npc-icon">📻</span>
+          <span class="npc-wave" v-if="radioAudio"><span></span><span></span><span></span><span></span></span>
+        </div>
+        <div class="npc-info">
+          <span class="npc-station">{{ activeCountry.name }} Radio</span>
+          <span class="npc-song">{{ countryRadio.currentSong?.name || 'Lädt...' }}</span>
+          <span class="npc-artist">{{ countryRadio.currentSong?.artist || '—' }}</span>
         </div>
         <div class="npc-controls">
-          <button class="npc-play" @click="playRadioSong(currentRadioSong)" :disabled="!currentRadioSong" title="Abspielen">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <button class="npc-mute" @click="toggleMute" :title="isMuted ? 'Ton an' : 'Stummschalten'">
+            <svg v-if="!isMuted" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
           </button>
-          <button class="npc-next" @click="radioNext" :disabled="radioSongs.length < 2" title="Nächster Song">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
+          <button class="npc-like" :class="{ liked: countryRadio.isLiked }" @click="toggleLike" :disabled="!countryRadio.currentSong">
+            <svg width="16" height="16" viewBox="0 0 24 24" :fill="countryRadio.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           </button>
         </div>
-        <div class="npc-empty" v-if="!radioSongs.length">
-          <span>Keine Songs — lade Songs über Upload hoch</span>
+        <div class="npc-empty" v-if="!countryRadio.currentSong">
+          <span>Keine Songs in der Warteschlange</span>
         </div>
       </div>
     </transition>
@@ -164,9 +211,11 @@ import * as d3 from 'd3'
 import * as topojson from 'topojson-client'
 import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore } from '@/stores/player'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
 const player = usePlayerStore()
+const auth   = useAuthStore()
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
@@ -198,46 +247,83 @@ const continentMap = {
 }
 function getContinentId(c) { return continentMap[c] ?? 'unknown' }
 
-const globalStation = {
-  id: 'global', station: 'NyuJam Global', song: 'Lädt...', artist: '—', icon: '🌐', color: '#5b9fff',
+// ── Country Radio ──────────────────────────────────────
+const countryRadio = ref({ onAir: false, currentSong: null, songStartedAt: null, rankings: [], weekend: false, isLiked: false })
+const isMuted      = ref(false)
+let   radioAudio   = null
+let   radioTimer   = null
+
+function authHeader() {
+  const token = localStorage.getItem('nyujam_token') || ''
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
 }
 
-// ── R2 Radio songs ─────────────────────────────────────
-const radioSongs   = ref([])
-const radioIdx     = ref(0)
-const radioPlaying = ref(false)
-let   radioInterval = null
-
-async function loadRadioSongs(continent = null, country = null) {
+async function loadCountryRadio(code) {
   try {
-    const params = new URLSearchParams()
-    if (continent) params.set('continent', continent)
-    if (country)   params.set('country', country)
-    const url = `${BASE_URL}/api/songs/radio${params.toString() ? '?' + params : ''}`
-    const res = await fetch(url)
-    radioSongs.value = await res.json()
-    radioIdx.value   = 0
-    if (radioSongs.value.length) {
-      globalStation.song   = radioSongs.value[0].name
-      globalStation.artist = radioSongs.value[0].artist
-      globalStation.cover  = radioSongs.value[0].cover
+    const res  = await fetch(`${BASE_URL}/api/radio/country/${code}`)
+    const data = await res.json()
+    const songChanged = data.currentSong?.id !== countryRadio.value.currentSong?.id
+    countryRadio.value = { ...countryRadio.value, ...data }
+    if (data.onAir && data.currentSong && songChanged) {
+      startSyncedPlay(data)
+      countryRadio.value.isLiked = false
+      // Log listener
+      if (auth.isLoggedIn) {
+        fetch(`${BASE_URL}/api/radio/country/${code}/listen`, {
+          method: 'POST', headers: authHeader(),
+          body: JSON.stringify({ songId: data.currentSong.id }),
+        }).catch(() => {})
+      }
     }
-  } catch { /* offline */ }
+    if (!data.onAir) stopRadioAudio()
+  } catch {}
 }
 
-function playRadioSong(song) {
-  if (!song) return
-  player.play(song)
-  radioPlaying.value = true
+function startSyncedPlay(data) {
+  stopRadioAudio()
+  if (!data.currentSong?.url) return
+  const elapsed = data.songStartedAt ? (Date.now() - new Date(data.songStartedAt).getTime()) / 1000 : 0
+  radioAudio = new Audio(data.currentSong.url)
+  radioAudio.volume = isMuted.value ? 0 : 1
+  radioAudio.currentTime = Math.max(0, elapsed)
+  radioAudio.play().catch(() => {})
+  radioAudio.onended = () => {
+    if (!activeCountry.value) return
+    fetch(`${BASE_URL}/api/radio/country/${activeCountry.value.iso}/next`, {
+      method: 'POST', headers: authHeader(),
+      body: JSON.stringify({ songId: data.currentSong.id }),
+    }).then(() => loadCountryRadio(activeCountry.value.iso)).catch(() => {})
+  }
 }
 
-function radioNext() {
-  if (!radioSongs.value.length) return
-  radioIdx.value = (radioIdx.value + 1) % radioSongs.value.length
-  playRadioSong(radioSongs.value[radioIdx.value])
+function stopRadioAudio() {
+  if (radioAudio) { radioAudio.pause(); radioAudio.src = ''; radioAudio = null }
 }
 
-const currentRadioSong = computed(() => radioSongs.value[radioIdx.value] || null)
+function toggleMute() {
+  isMuted.value = !isMuted.value
+  if (radioAudio) radioAudio.volume = isMuted.value ? 0 : 1
+}
+
+async function toggleLike() {
+  if (!auth.isLoggedIn || !countryRadio.value.currentSong || !activeCountry.value) return
+  const code   = activeCountry.value.iso
+  const songId = countryRadio.value.currentSong.id
+  const wasLiked = countryRadio.value.isLiked
+  countryRadio.value.isLiked = !wasLiked
+  await fetch(`${BASE_URL}/api/radio/country/${code}/${wasLiked ? 'unlike' : 'like'}`, {
+    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+  }).catch(() => { countryRadio.value.isLiked = wasLiked })
+}
+
+function playRankSong(r) {
+  player.play({ id: `u_${r.song_id}`, name: r.song_name, artist: r.artist, cover: r.cover_url, url: null })
+  // Fetch actual URL
+  fetch(`${BASE_URL}/api/songs/all`).then(res => res.json()).then(songs => {
+    const s = songs.find(s => s.id === `u_${r.song_id}`)
+    if (s) player.play(s)
+  })
+}
 
 // ── State ──────────────────────────────────────────────
 const loading     = ref(true)
@@ -306,7 +392,6 @@ function zoomToCountry(iso) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
-  await loadRadioSongs()
   try {
     const res  = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
     const world = await res.json()
@@ -369,6 +454,11 @@ onMounted(async () => {
   }
 })
 
+onUnmounted(() => {
+  stopRadioAudio()
+  clearInterval(radioTimer)
+})
+
 // ── Styling ────────────────────────────────────────────
 function contColor(contId) {
   return continentMeta.find(c => c.id === contId)?.color ?? '#334'
@@ -395,7 +485,7 @@ function countryStroke(f) {
 }
 
 // ── Interaction ────────────────────────────────────────
-function onFeatureClick(f) {
+async function onFeatureClick(f) {
   const cid  = getContinentId(f.continent)
   const cont = continentMeta.find(c => c.id === cid)
   if (!cont) return
@@ -405,23 +495,22 @@ function onFeatureClick(f) {
     activeContinent.value = cont
     activeCountry.value   = null
     zoomToContinent(cid)
-    loadRadioSongs(cont.id)
+    stopRadioAudio()
   } else if (activeContinent.value.id === cid) {
     // Continent → Country
+    const iso = f.alpha2 || f.iso
     activeCountry.value = {
-      iso:      f.iso,
+      iso:      iso,
       alpha2:   f.alpha2,
       name:     f.name,
       centroid: f.centroid,
       id:       f.iso,
-      station:  f.name + ' Radio',
-      song:     cont.song,
-      artist:   cont.artist,
-      icon:     cont.icon,
-      color:    cont.color,
     }
     zoomToCountry(f.iso)
-    loadRadioSongs(cont.id, f.alpha2 || f.iso)
+    // Start country radio polling
+    clearInterval(radioTimer)
+    await loadCountryRadio(iso)
+    radioTimer = setInterval(() => loadCountryRadio(iso), 5000)
   }
 }
 
@@ -429,33 +518,32 @@ function drillToWorld() {
   activeContinent.value = null
   activeCountry.value   = null
   zoomToWorld()
-  loadRadioSongs()  // global — all songs
+  stopRadioAudio()
+  clearInterval(radioTimer)
+  countryRadio.value = { onAir: false, currentSong: null, songStartedAt: null, rankings: [], weekend: false, isLiked: false }
 }
+
 function drillToContinent() {
   activeCountry.value = null
-  if (activeContinent.value) {
-    zoomToContinent(activeContinent.value.id)
-    loadRadioSongs(activeContinent.value.id)
-  }
+  if (activeContinent.value) zoomToContinent(activeContinent.value.id)
+  stopRadioAudio()
+  clearInterval(radioTimer)
+  countryRadio.value = { onAir: false, currentSong: null, songStartedAt: null, rankings: [], weekend: false, isLiked: false }
 }
+
 function goBack() {
   if (activeCountry.value)   { drillToContinent(); return }
   if (activeContinent.value) { drillToWorld();     return }
   router.push('/')
 }
 
-// ── Current station ────────────────────────────────────
-const currentStation = computed(() => {
-  if (activeCountry.value)   return activeCountry.value
-  if (activeContinent.value) return activeContinent.value
-  return globalStation
-})
+// ── Styling ────────────────────────────────────────────
 const currentTitle = computed(() => {
   if (activeCountry.value)   return activeCountry.value.name
   if (activeContinent.value) return activeContinent.value.name + ' Radio'
   return 'Global Radio'
 })
-const titleKey = computed(() => currentStation.value.id ?? currentStation.value.iso)
+const titleKey = computed(() => activeCountry.value?.iso ?? activeContinent.value?.id ?? 'global')
 const glowStyle = computed(() => ({
   background: `radial-gradient(ellipse 80% 60% at 50% 40%, ${currentStation.value.color}14 0%, transparent 70%)`,
   transition: 'background 0.8s ease',
@@ -678,24 +766,29 @@ const glowStyle = computed(() => ({
 .npc-artist { font-size: 0.7rem; color: rgba(240,237,230,0.4); }
 
 .npc-controls { display: flex; flex-direction: column; gap: 0.35rem; flex-shrink: 0; }
-.npc-play {
-  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-  background: var(--accent); border: none; cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: #060c12; box-shadow: 0 0 14px var(--accent);
-  transition: transform 0.15s, box-shadow 0.2s, opacity 0.2s;
+.npc-mute, .npc-like {
+  width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(240,237,230,0.15);
+  background: rgba(240,237,230,0.05); color: rgba(240,237,230,0.5); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: all 0.2s;
 }
-.npc-play:hover:not(:disabled) { transform: scale(1.1); box-shadow: 0 0 22px var(--accent); }
-.npc-play:disabled { opacity: 0.3; cursor: default; }
-.npc-next {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: rgba(240,237,230,0.06); border: 1px solid rgba(240,237,230,0.1);
-  color: rgba(240,237,230,0.35); cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  transition: color 0.2s, background 0.2s;
-}
-.npc-next:hover:not(:disabled) { color: #f0ede6; background: rgba(240,237,230,0.1); }
-.npc-next:disabled { opacity: 0.3; cursor: default; }
+.npc-mute:hover { color: #f0ede6; border-color: rgba(240,237,230,0.3); }
+.npc-like:hover { color: #ff5a32; border-color: rgba(255,90,50,0.3); }
+.npc-like.liked { color: #ff5a32; border-color: rgba(255,90,50,0.4); background: rgba(255,90,50,0.1); }
+.npc-like:disabled { opacity: 0.3; cursor: default; }
+
+/* Rankings */
+.rankings-wrap { width: 100%; margin-top: 1rem; }
+.rankings-title { font-family: 'Bebas Neue', cursive; font-size: 1rem; letter-spacing: 0.15em; color: #f0c832; margin-bottom: 0.6rem; }
+.rankings-list { display: flex; flex-direction: column; gap: 0.3rem; max-height: 400px; overflow-y: auto; }
+.rank-item { display: flex; align-items: center; gap: 0.65rem; padding: 0.5rem 0.65rem; border-radius: 3px; cursor: pointer; transition: background 0.15s; }
+.rank-item:hover { background: rgba(240,237,230,0.05); }
+.rank-nr { font-size: 0.7rem; color: rgba(240,237,230,0.25); width: 1.2rem; text-align: center; flex-shrink: 0; font-family: 'Bebas Neue', cursive; }
+.rank-cover { width: 32px; height: 32px; border-radius: 3px; background: rgba(240,237,230,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 0.85rem; overflow: hidden; }
+.rank-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.rank-info { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.rank-name { font-size: 0.82rem; font-weight: 500; color: #f0ede6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rank-artist { font-size: 0.65rem; color: rgba(240,237,230,0.35); }
+.rank-pct { font-size: 0.72rem; color: #f0c832; flex-shrink: 0; font-family: 'Bebas Neue', cursive; letter-spacing: 0.05em; }
 .npc-empty {
   position: absolute; inset: 0; background: rgba(10,10,15,0.88);
   display: flex; align-items: center; justify-content: center;

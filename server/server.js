@@ -9,6 +9,7 @@ const bcrypt  = require('bcryptjs')
 const rateLimit = require('express-rate-limit')
 const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { Resend } = require('resend')
+const cron    = require('node-cron')
 const { createClient } = require('@supabase/supabase-js')
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -260,6 +261,14 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
     const mp3Url = await uploadToR2(mp3File.buffer, mp3Key, 'audio/mpeg')
     const { data, error } = await sb.from('songs_meta').insert({ id, title, artist, mp3_url: mp3Url, cover_url: coverUrl, country, city, continent, uploaded_by: user.id }).select().single()
     if (error) throw new Error(error.message)
+
+    // Add to country radio queue
+    if (country) {
+      const { data: lastPos } = await sb.from('radio_queue').select('position').eq('country', country).order('position', { ascending: false }).limit(1).single()
+      const position = (lastPos?.position ?? -1) + 1
+      await sb.from('radio_queue').insert({ song_id: id, country, position })
+    }
+
     res.status(201).json(data)
   } catch (err) {
     console.error('Upload error:', err.message)
@@ -813,6 +822,12 @@ app.post('/api/albums', upload.fields([
       const trackArtist = tracks[i].artist?.trim() || artist
       await sb.from('songs_meta').insert({ id: songId, title: trackTitle, artist: trackArtist, mp3_url: mp3Url, cover_url: coverUrl, country, city, continent, uploaded_by: user.id })
       await sb.from('album_songs').insert({ id: `${albumId}_${i}`, album_id: albumId, song_id: songId, track_nr: i + 1 })
+      // Add to country radio queue
+      if (country) {
+        const { data: lastPos } = await sb.from('radio_queue').select('position').eq('country', country).order('position', { ascending: false }).limit(1).single()
+        const position = (lastPos?.position ?? -1) + 1
+        await sb.from('radio_queue').insert({ song_id: songId, country, position })
+      }
       songIds.push(songId)
     }
 
@@ -918,6 +933,285 @@ app.post('/api/donations/webhook', express.raw({ type: 'application/json' }), (r
     res.status(400).send(`Webhook Error: ${err.message}`)
   }
 })
+
+// ── Country Radio ──────────────────────────────────────
+
+const COUNTRY_TIMEZONES = {
+  DE:'Europe/Berlin', AT:'Europe/Vienna', CH:'Europe/Zurich', FR:'Europe/Paris',
+  GB:'Europe/London', IT:'Europe/Rome', ES:'Europe/Madrid', NL:'Europe/Amsterdam',
+  BE:'Europe/Brussels', PL:'Europe/Warsaw', SE:'Europe/Stockholm', NO:'Europe/Oslo',
+  DK:'Europe/Copenhagen', FI:'Europe/Helsinki', PT:'Europe/Lisbon', GR:'Europe/Athens',
+  RU:'Europe/Moscow', UA:'Europe/Kiev', TR:'Europe/Istanbul',
+  US:'America/New_York', CA:'America/Toronto', MX:'America/Mexico_City',
+  BR:'America/Sao_Paulo', AR:'America/Argentina/Buenos_Aires', CO:'America/Bogota', CL:'America/Santiago',
+  JP:'Asia/Tokyo', KR:'Asia/Seoul', CN:'Asia/Shanghai', IN:'Asia/Kolkata',
+  TH:'Asia/Bangkok', ID:'Asia/Jakarta', SG:'Asia/Singapore', PH:'Asia/Manila',
+  NG:'Africa/Lagos', ZA:'Africa/Johannesburg', GH:'Africa/Accra', KE:'Africa/Nairobi', EG:'Africa/Cairo',
+  AU:'Australia/Sydney', NZ:'Pacific/Auckland',
+}
+
+function getCountryHour(country) {
+  const tz = COUNTRY_TIMEZONES[country] || 'UTC'
+  return parseInt(new Intl.DateTimeFormat('en', { hour: 'numeric', hour12: false, timeZone: tz }).format(new Date()))
+}
+
+function getCountryDate(country) {
+  const tz = COUNTRY_TIMEZONES[country] || 'UTC'
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()) // YYYY-MM-DD
+}
+
+function getCountryWeekday(country) {
+  const tz = COUNTRY_TIMEZONES[country] || 'UTC'
+  return new Intl.DateTimeFormat('en', { weekday: 'short', timeZone: tz }).format(new Date())
+}
+
+function isWeekend(country) {
+  const day = getCountryWeekday(country)
+  return day === 'Sat' || day === 'Sun'
+}
+
+function isOnAir(country) {
+  const h = getCountryHour(country)
+  return h >= 8 && h < 22
+}
+
+// Get or initialize country radio state
+async function getCountryState(country) {
+  const { data } = await sb.from('radio_country_state').select('*').eq('country', country).single()
+  if (data) return data
+  // Initialize with empty state
+  const { data: newState } = await sb.from('radio_country_state').insert({
+    country, current_song: null, song_started_at: null, played_today: [], updated_at: new Date().toISOString()
+  }).select().single()
+  return newState
+}
+
+// Advance to next song for a country
+async function advanceCountrySong(country) {
+  const state   = await getCountryState(country)
+  const today   = getCountryDate(country)
+  const weekend = isWeekend(country)
+  let nextSong  = null
+
+  if (weekend) {
+    // Weekend: play Top 10 from each weekday randomly
+    const weekStart = getWeekStart(country)
+    const { data: topSongs } = await sb.from('radio_rankings_daily')
+      .select('*').eq('country', country).gte('date', weekStart)
+      .order('like_pct', { ascending: false }).limit(50)
+    if (topSongs?.length) {
+      // Pick top 10 per day, flatten, shuffle
+      const pool = topSongs.slice(0, 70)
+      const pick = pool[Math.floor(Math.random() * pool.length)]
+      const { data: s } = await sb.from('songs_meta').select('*').eq('id', pick.song_id).single()
+      if (s) nextSong = { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }
+    }
+  } else {
+    // Weekday: get next from queue
+    const { data: queueItems } = await sb.from('radio_queue')
+      .select('*, songs_meta(*)').eq('country', country)
+      .order('position', { ascending: true }).limit(1)
+    if (queueItems?.length) {
+      const item = queueItems[0]
+      const s    = item.songs_meta
+      nextSong   = { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }
+      // Remove from queue, add to played_today
+      await sb.from('radio_queue').delete().eq('id', item.id)
+      const played = [...(state.played_today || []), { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }]
+      await sb.from('radio_country_state').update({ played_today: played }).eq('country', country)
+    } else {
+      // Queue empty — replay today's songs randomly
+      const played = state.played_today || []
+      if (played.length) {
+        nextSong = played[Math.floor(Math.random() * played.length)]
+      }
+    }
+  }
+
+  if (!nextSong) return null
+  const now = new Date().toISOString()
+  await sb.from('radio_country_state').update({
+    current_song: nextSong, song_started_at: now, updated_at: now
+  }).eq('country', country)
+  return nextSong
+}
+
+function getWeekStart(country) {
+  const tz   = COUNTRY_TIMEZONES[country] || 'UTC'
+  const now  = new Date()
+  const day  = now.toLocaleDateString('en', { weekday: 'short', timeZone: tz })
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const idx  = days.indexOf(day)
+  const monday = new Date(now)
+  monday.setDate(now.getDate() - (idx === 0 ? 6 : idx - 1))
+  return monday.toISOString().split('T')[0]
+}
+
+// GET /api/radio/country/:code — get current state
+app.get('/api/radio/country/:code', async (req, res) => {
+  const country = req.params.code.toUpperCase()
+  const onAir   = isOnAir(country)
+  const weekend = isWeekend(country)
+  const hour    = getCountryHour(country)
+
+  if (!onAir) {
+    // After 22:00 — return ranking
+    const today   = getCountryDate(country)
+    const rankDate = weekend && hour >= 22 ? null : today
+    let rankings = []
+    if (weekend) {
+      // Sunday after 22: weekly ranking
+      const weekStart = getWeekStart(country)
+      const { data } = await sb.from('radio_rankings_weekly').select('*')
+        .eq('country', country).eq('week_start', weekStart)
+        .order('like_pct', { ascending: false }).limit(50)
+      rankings = data || []
+    } else {
+      const { data } = await sb.from('radio_rankings_daily').select('*')
+        .eq('country', country).eq('date', today)
+        .order('like_pct', { ascending: false }).limit(50)
+      rankings = data || []
+    }
+    return res.json({ onAir: false, weekend, rankings })
+  }
+
+  const state = await getCountryState(country)
+
+  // Auto-advance if no current song
+  if (!state.current_song) {
+    const next = await advanceCountrySong(country)
+    if (!next) return res.json({ onAir: true, weekend, currentSong: null, songStartedAt: null })
+    const fresh = await getCountryState(country)
+    return res.json({ onAir: true, weekend, currentSong: fresh.current_song, songStartedAt: fresh.song_started_at })
+  }
+
+  res.json({ onAir: true, weekend, currentSong: state.current_song, songStartedAt: state.song_started_at })
+})
+
+// POST /api/radio/country/:code/next — advance to next song (called by client when song ends)
+app.post('/api/radio/country/:code/next', async (req, res) => {
+  const country = req.params.code.toUpperCase()
+  const state   = await getCountryState(country)
+  // Only advance if the requesting song matches current (prevents race conditions)
+  const { songId } = req.body
+  if (state.current_song?.id !== songId) {
+    return res.json({ currentSong: state.current_song, songStartedAt: state.song_started_at })
+  }
+  const next = await advanceCountrySong(country)
+  const fresh = await getCountryState(country)
+  res.json({ currentSong: fresh.current_song, songStartedAt: fresh.song_started_at })
+})
+
+// POST /api/radio/country/:code/like — like current song
+app.post('/api/radio/country/:code/like', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const country = req.params.code.toUpperCase()
+  const { songId } = req.body
+  if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  const date = getCountryDate(country)
+  await sb.from('radio_likes').upsert({ song_id: songId.replace(/^u_/, ''), user_id: user.id, country, date }, { onConflict: 'song_id,user_id,country,date' })
+  res.json({ ok: true })
+})
+
+// POST /api/radio/country/:code/unlike — remove like
+app.post('/api/radio/country/:code/unlike', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const country = req.params.code.toUpperCase()
+  const { songId } = req.body
+  const date = getCountryDate(country)
+  await sb.from('radio_likes').delete()
+    .eq('song_id', songId.replace(/^u_/, '')).eq('user_id', user.id).eq('country', country).eq('date', date)
+  res.json({ ok: true })
+})
+
+// POST /api/radio/country/:code/listen — log listener
+app.post('/api/radio/country/:code/listen', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(200).json({ ok: true }) // guests don't count
+  const country = req.params.code.toUpperCase()
+  const { songId } = req.body
+  if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  const date = getCountryDate(country)
+  await sb.from('radio_listeners').upsert({ song_id: songId.replace(/^u_/, ''), user_id: user.id, country, date }, { onConflict: 'song_id,user_id,country,date' })
+  res.json({ ok: true })
+})
+
+// GET /api/radio/country/:code/rankings/weekly — get all weekly rankings
+app.get('/api/radio/country/:code/rankings/weekly', async (req, res) => {
+  const country = req.params.code.toUpperCase()
+  const { data } = await sb.from('radio_rankings_weekly').select('*')
+    .eq('country', country).order('week_start', { ascending: false }).order('like_pct', { ascending: false })
+  res.json(data || [])
+})
+
+// ── Cron: Save rankings at 22:00 local time (check every minute) ──
+cron.schedule('* * * * *', async () => {
+  // Get all countries that are at 22:00
+  const countries = Object.keys(COUNTRY_TIMEZONES)
+  for (const country of countries) {
+    const h    = getCountryHour(country)
+    const date = getCountryDate(country)
+    const min  = new Date().getMinutes()
+    if (h === 22 && min === 0) {
+      await saveCountryRanking(country, date)
+    }
+  }
+})
+
+async function saveCountryRanking(country, date) {
+  const weekend = isWeekend(country)
+  // Get all songs played today
+  const { data: state } = await sb.from('radio_country_state').select('played_today').eq('country', country).single()
+  const played = state?.played_today || []
+  const songIds = [...new Set(played.map(s => s.id?.replace(/^u_/, '')))]
+
+  for (const songId of songIds) {
+    const { count: listenerCount } = await sb.from('radio_listeners').select('*', { count: 'exact', head: true }).eq('song_id', songId).eq('country', country).eq('date', date)
+    const { count: likeCount }     = await sb.from('radio_likes').select('*', { count: 'exact', head: true }).eq('song_id', songId).eq('country', country).eq('date', date)
+    const like_pct = listenerCount > 0 ? Math.round((likeCount / listenerCount) * 10000) / 100 : 0
+    const { data: song } = await sb.from('songs_meta').select('title,artist,cover_url').eq('id', songId).single()
+    if (!song) continue
+    await sb.from('radio_rankings_daily').upsert({
+      song_id: songId, song_name: song.title, artist: song.artist, cover_url: song.cover_url,
+      country, date, like_pct, listeners: listenerCount || 0, likes: likeCount || 0,
+    }, { onConflict: 'song_id,country,date' })
+  }
+
+  // Reset state for next day
+  await sb.from('radio_country_state').update({ current_song: null, song_started_at: null, played_today: [] }).eq('country', country)
+
+  // Sunday 22:00 — save weekly ranking
+  if (getCountryWeekday(country) === 'Sun') {
+    const weekStart = getWeekStart(country)
+    // Get all daily rankings from this week
+    const { data: weekRankings } = await sb.from('radio_rankings_daily').select('*')
+      .eq('country', country).gte('date', weekStart)
+    // Aggregate by song
+    const byId = {}
+    for (const r of weekRankings || []) {
+      if (!byId[r.song_id]) byId[r.song_id] = { ...r, total_listeners: 0, total_likes: 0 }
+      byId[r.song_id].total_listeners += r.listeners
+      byId[r.song_id].total_likes     += r.likes
+    }
+    for (const s of Object.values(byId)) {
+      const like_pct = s.total_listeners > 0 ? Math.round((s.total_likes / s.total_listeners) * 10000) / 100 : 0
+      await sb.from('radio_rankings_weekly').upsert({
+        song_id: s.song_id, song_name: s.song_name, artist: s.artist, cover_url: s.cover_url,
+        country, week_start: weekStart, like_pct, listeners: s.total_listeners, likes: s.total_likes,
+      }, { onConflict: 'song_id,country,week_start' })
+    }
+    // Delete old daily data (keep weekly)
+    const prevMonday = new Date(weekStart)
+    prevMonday.setDate(prevMonday.getDate() - 7)
+    await sb.from('radio_rankings_daily').delete().eq('country', country).lt('date', weekStart)
+    await sb.from('radio_listeners').delete().eq('country', country).lt('date', weekStart)
+    await sb.from('radio_likes').delete().eq('country', country).lt('date', weekStart)
+  }
+
+  console.log(`✅ Rankings saved for ${country} on ${date}`)
+}
 
 // ── Radio Sessions ─────────────────────────────────────
 async function getAllSongs(req) {
