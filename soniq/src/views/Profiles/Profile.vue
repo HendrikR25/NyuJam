@@ -42,6 +42,22 @@
           <button class="submit-btn" :class="{ loading: auth.loading }" @click="submitLogin" :disabled="auth.loading">
             {{ auth.loading ? 'Anmelden...' : 'Anmelden' }}
           </button>
+          <button class="forgot-btn" @click="mode = 'forgot'">Passwort vergessen?</button>
+        </div>
+
+        <!-- Forgot Password Form -->
+        <div class="auth-form" key="forgot" v-else-if="mode === 'forgot'">
+          <p class="form-hint">Gib deine E-Mail ein — wir schicken dir einen Link zum Zurücksetzen.</p>
+          <div class="field">
+            <label class="field-label">E-Mail</label>
+            <input v-model="forgotEmail" class="field-input" type="email" placeholder="deine@email.de" @keydown.enter="submitForgot" />
+          </div>
+          <div class="form-success" v-if="forgotSent">✓ E-Mail gesendet — prüfe dein Postfach.</div>
+          <div class="form-error" v-if="auth.error">⚠ {{ auth.error }}</div>
+          <button class="submit-btn" :class="{ loading: auth.loading }" @click="submitForgot" :disabled="auth.loading || forgotSent">
+            {{ forgotSent ? 'Gesendet' : auth.loading ? 'Sende...' : 'Link senden' }}
+          </button>
+          <button class="forgot-btn" @click="mode = 'login'">← Zurück zum Login</button>
         </div>
 
         <!-- Register Form -->
@@ -65,6 +81,9 @@
           <button class="submit-btn" :class="{ loading: auth.loading }" @click="submitRegister" :disabled="auth.loading">
             {{ auth.loading ? 'Registrieren...' : 'Account erstellen' }}
           </button>
+          <div class="form-success verify-notice" v-if="registerSuccess">
+            ✓ Account erstellt! Prüfe deine E-Mail und bestätige deine Adresse.
+          </div>
         </div>
       </transition>
     </template>
@@ -169,6 +188,28 @@
 
         <button class="submit-btn" :class="{ loading: auth.loading }" @click="saveProfile" :disabled="auth.loading">
           {{ auth.loading ? 'Speichern...' : 'Profil speichern' }}
+        </button>
+      </div>
+
+      <!-- Change Password -->
+      <div class="profile-form" style="margin-top:0.5rem">
+        <div class="section-title">Passwort ändern</div>
+        <div class="field">
+          <label class="field-label">Aktuelles Passwort</label>
+          <input v-model="currentPw" class="field-input" type="password" placeholder="••••••••" />
+        </div>
+        <div class="field">
+          <label class="field-label">Neues Passwort</label>
+          <input v-model="newPw" class="field-input" type="password" placeholder="Mindestens 6 Zeichen" />
+        </div>
+        <div class="field">
+          <label class="field-label">Neues Passwort bestätigen</label>
+          <input v-model="newPwConfirm" class="field-input" type="password" placeholder="Wiederholen..." />
+        </div>
+        <div class="form-success" v-if="pwSuccess">✓ Passwort geändert</div>
+        <div class="form-error"   v-if="pwError">⚠ {{ pwError }}</div>
+        <button class="submit-btn" @click="changePassword" :disabled="changingPw">
+          {{ changingPw ? 'Wird geändert...' : 'Passwort ändern' }}
         </button>
       </div>
 
@@ -279,7 +320,7 @@ async function submitRegister() {
   if (!regUsername.value.trim() || !regEmail.value.trim() || !regPassword.value) return
   if (regPassword.value.length < 6) { auth.error = 'Passwort muss mindestens 6 Zeichen haben.'; return }
   const ok = await auth.register({ username: regUsername.value, email: regEmail.value, password: regPassword.value })
-  if (ok) clearForm()
+  if (ok) { clearForm(); registerSuccess.value = true }
 }
 
 // ── Profile editing ────────────────────────────────────
@@ -446,7 +487,52 @@ async function confirmCrop() {
   cropSrc.value = null
 }
 
-// ── My Uploads ─────────────────────────────────────────
+const forgotEmail   = ref('')
+const forgotSent    = ref(false)
+const registerSuccess = ref(false)
+
+async function submitForgot() {
+  if (!forgotEmail.value.trim()) return
+  auth.loading = true; auth.error = null
+  try {
+    await fetch(`${BASE_URL}/api/auth/forgot-password`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: forgotEmail.value.trim() }),
+    })
+    forgotSent.value = true
+  } catch { auth.error = 'Verbindungsfehler.' }
+  finally { auth.loading = false }
+}
+
+// Change password (logged in)
+const currentPw    = ref('')
+const newPw        = ref('')
+const newPwConfirm = ref('')
+const pwError      = ref('')
+const pwSuccess    = ref(false)
+const changingPw   = ref(false)
+
+async function changePassword() {
+  pwError.value = ''; pwSuccess.value = false
+  if (!currentPw.value || !newPw.value) { pwError.value = 'Alle Felder ausfüllen.'; return }
+  if (newPw.value.length < 6) { pwError.value = 'Mindestens 6 Zeichen.'; return }
+  if (newPw.value !== newPwConfirm.value) { pwError.value = 'Passwörter stimmen nicht überein.'; return }
+  changingPw.value = true
+  try {
+    const res  = await fetch(`${BASE_URL}/api/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ currentPassword: currentPw.value, newPassword: newPw.value }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      pwSuccess.value = true
+      currentPw.value = ''; newPw.value = ''; newPwConfirm.value = ''
+      setTimeout(() => { pwSuccess.value = false }, 3000)
+    } else { pwError.value = data.error }
+  } catch { pwError.value = 'Verbindungsfehler.' }
+  finally { changingPw.value = false }
+}
 const BASE_URL      = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 const myUploads     = ref({ songs: [], albums: [] })
 const editingId     = ref(null)
@@ -617,6 +703,11 @@ function showFeedback(msg) {
 .avatar-wrap:hover .avatar-overlay { opacity: 1; }
 .profile-username { font-family: 'Bebas Neue', cursive; font-size: 1.4rem; letter-spacing: 0.1em; color: #f0ede6; }
 .profile-email { font-size: 0.72rem; color: rgba(240,237,230,0.3); margin-top: 0.1rem; display: block; }
+.forgot-btn { background: none; border: none; color: rgba(240,237,230,0.3); font-family: 'DM Sans', sans-serif; font-size: 0.75rem; cursor: pointer; padding: 0.25rem 0; text-align: center; transition: color 0.2s; }
+.forgot-btn:hover { color: rgba(240,237,230,0.6); }
+.form-hint { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.6; }
+.verify-notice { line-height: 1.6; }
+.section-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); padding-bottom: 0.25rem; border-bottom: 1px solid rgba(240,237,230,0.06); }
 .hidden { display: none; }
 
 /* Toggle switch */
