@@ -545,7 +545,7 @@ const currentTitle = computed(() => {
 })
 const titleKey = computed(() => activeCountry.value?.iso ?? activeContinent.value?.id ?? 'global')
 const glowStyle = computed(() => ({
-  background: `radial-gradient(ellipse 80% 60% at 50% 40%, ${currentStation.value.color}14 0%, transparent 70%)`,
+  background: `radial-gradient(ellipse 80% 60% at 50% 40%, rgba(91,106,255,0.08) 0%, transparent 70%)`,
   transition: 'background 0.8s ease',
 }))
 </script>
