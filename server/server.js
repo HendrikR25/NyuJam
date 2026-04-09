@@ -255,6 +255,63 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
   }
 })
 
+// PATCH /api/songs/:id — update title and/or cover
+app.patch('/api/songs/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const rawId = req.params.id.replace(/^u_/, '')
+  const { data: song } = await sb.from('songs_meta').select('*').eq('id', rawId).single()
+  if (!song) return res.status(404).json({ error: 'Song nicht gefunden' })
+  if (!user.is_admin && user.username.toLowerCase() !== song.artist.toLowerCase())
+    return res.status(403).json({ error: 'Keine Berechtigung' })
+  const updates = {}
+  if (req.body.title?.trim()) updates.title = req.body.title.trim()
+  if (req.files?.cover?.[0]) {
+    const coverFile = req.files.cover[0]
+    const coverKey  = `covers/${rawId}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+    updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
+    if (song.cover_url) deleteFromR2(decodeURIComponent(song.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+  }
+  const { data } = await sb.from('songs_meta').update(updates).eq('id', rawId).select().single()
+  res.json(data)
+})
+
+// PATCH /api/albums/:id — update title and/or cover
+app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: album } = await sb.from('albums').select('*').eq('id', req.params.id).single()
+  if (!album) return res.status(404).json({ error: 'Album nicht gefunden' })
+  if (!user.is_admin && user.username.toLowerCase() !== album.artist.toLowerCase())
+    return res.status(403).json({ error: 'Keine Berechtigung' })
+  const updates = {}
+  if (req.body.title?.trim()) updates.title = req.body.title.trim()
+  if (req.files?.cover?.[0]) {
+    const coverFile = req.files.cover[0]
+    const coverKey  = `covers/album-${req.params.id}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
+    updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
+    if (album.cover_url) deleteFromR2(decodeURIComponent(album.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+    const { data: albumSongs } = await sb.from('album_songs').select('song_id').eq('album_id', req.params.id)
+    for (const as of albumSongs || []) {
+      await sb.from('songs_meta').update({ cover_url: updates.cover_url }).eq('id', as.song_id)
+    }
+  }
+  const { data } = await sb.from('albums').update(updates).eq('id', req.params.id).select().single()
+  res.json(data)
+})
+
+// GET /api/my-uploads — songs and albums uploaded by current user
+app.get('/api/my-uploads', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: songs }  = await sb.from('songs_meta').select('*').eq('uploaded_by', user.id).order('created_at', { ascending: false })
+  const { data: albums } = await sb.from('albums').select('*, album_songs(count)').eq('uploaded_by', user.id).order('created_at', { ascending: false })
+  res.json({
+    songs:  (songs  || []).map(s => ({ id: s.id, title: s.title, artist: s.artist, coverUrl: s.cover_url, createdAt: s.created_at })),
+    albums: (albums || []).map(a => ({ id: a.id, title: a.title, artist: a.artist, coverUrl: a.cover_url, tracks: a.album_songs?.[0]?.count || 0, createdAt: a.created_at })),
+  })
+})
+
 app.delete('/api/songs/:id', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })

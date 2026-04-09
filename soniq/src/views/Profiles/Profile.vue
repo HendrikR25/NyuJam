@@ -3,11 +3,7 @@
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
 
-    <!-- Ad Banner -->
-    <div class="ad-banner">
-      <span class="ad-label">Anzeige</span>
-      <slot name="ad-top"><div class="ad-placeholder">Advertisement</div></slot>
-    </div>
+    <AdBanner ad-slot="1918440727" />
 
     <button class="back-btn" @click="router.push('/')">← Home</button>
 
@@ -178,11 +174,79 @@
 
       <!-- Logout -->
       <button class="logout-btn" @click="auth.logout()">Abmelden</button>
+
+      <!-- ── My Uploads ── -->
+      <div class="uploads-section" v-if="myUploads.songs.length || myUploads.albums.length">
+        <h2 class="uploads-title">Meine Uploads</h2>
+
+        <!-- Songs -->
+        <div class="uploads-group" v-if="myUploads.songs.length">
+          <span class="uploads-group-label">Songs ({{ myUploads.songs.length }})</span>
+          <div class="upload-item" v-for="song in myUploads.songs" :key="song.id">
+            <div class="ui-cover" @click="triggerCoverEdit('song', song.id)">
+              <img v-if="song.coverUrl" :src="song.coverUrl" class="ui-cover-img" />
+              <span v-else class="ui-cover-icon">♩</span>
+              <div class="ui-cover-overlay">🖼</div>
+            </div>
+            <div class="ui-info">
+              <input
+                v-if="editingId === song.id"
+                v-model="editingTitle"
+                class="ui-title-input"
+                @keydown.enter="saveTitle('song', song.id)"
+                @keydown.escape="editingId = null"
+                autofocus
+              />
+              <span v-else class="ui-title" @click="startEdit(song.id, song.title)">{{ song.title }}</span>
+              <span class="ui-artist">{{ song.artist }}</span>
+            </div>
+            <div class="ui-actions">
+              <button class="ui-btn ui-btn--save" v-if="editingId === song.id" @click="saveTitle('song', song.id)">✓</button>
+              <button class="ui-btn ui-btn--cancel" v-if="editingId === song.id" @click="editingId = null">✕</button>
+              <button class="ui-btn ui-btn--delete" @click="deleteUpload('song', song.id, song.title)">🗑</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Albums -->
+        <div class="uploads-group" v-if="myUploads.albums.length">
+          <span class="uploads-group-label">Alben ({{ myUploads.albums.length }})</span>
+          <div class="upload-item" v-for="album in myUploads.albums" :key="album.id">
+            <div class="ui-cover" @click="triggerCoverEdit('album', album.id)">
+              <img v-if="album.coverUrl" :src="album.coverUrl" class="ui-cover-img" />
+              <span v-else class="ui-cover-icon">▣</span>
+              <div class="ui-cover-overlay">🖼</div>
+            </div>
+            <div class="ui-info">
+              <input
+                v-if="editingId === album.id"
+                v-model="editingTitle"
+                class="ui-title-input"
+                @keydown.enter="saveTitle('album', album.id)"
+                @keydown.escape="editingId = null"
+                autofocus
+              />
+              <span v-else class="ui-title" @click="startEdit(album.id, album.title)">{{ album.title }}</span>
+              <span class="ui-artist">{{ album.tracks }} Tracks</span>
+            </div>
+            <div class="ui-actions">
+              <button class="ui-btn ui-btn--save" v-if="editingId === album.id" @click="saveTitle('album', album.id)">✓</button>
+              <button class="ui-btn ui-btn--cancel" v-if="editingId === album.id" @click="editingId = null">✕</button>
+              <button class="ui-btn ui-btn--delete" @click="deleteUpload('album', album.id, album.title)">🗑</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden file input for cover change -->
+        <input ref="coverEditRef" type="file" accept="image/*" class="hidden" @change="onCoverEditChange" />
+        <div class="upload-feedback" v-if="uploadFeedback">{{ uploadFeedback }}</div>
+      </div>
     </template>
   </div>
 </template>
 
 <script setup>
+import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -381,6 +445,110 @@ async function confirmCrop() {
   await auth.updateProfile({ avatar: result })
   cropSrc.value = null
 }
+
+// ── My Uploads ─────────────────────────────────────────
+const BASE_URL      = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+const myUploads     = ref({ songs: [], albums: [] })
+const editingId     = ref(null)
+const editingTitle  = ref('')
+const editingType   = ref(null)
+const coverEditRef  = ref(null)
+const coverEditTarget = ref(null)  // { type, id }
+const uploadFeedback = ref('')
+
+function authHeader() {
+  const token = localStorage.getItem('nyujam_token') || ''
+  return { Authorization: `Bearer ${token}` }
+}
+
+watch(() => auth.isLoggedIn, async (loggedIn) => {
+  if (loggedIn) await loadMyUploads()
+}, { immediate: true })
+
+async function loadMyUploads() {
+  if (!auth.isLoggedIn) return
+  try {
+    const res = await fetch(`${BASE_URL}/api/my-uploads`, { headers: authHeader() })
+    myUploads.value = await res.json()
+  } catch {}
+}
+
+function startEdit(id, title) {
+  editingId.value    = id
+  editingTitle.value = title
+}
+
+async function saveTitle(type, id) {
+  if (!editingTitle.value.trim()) return
+  try {
+    const formData = new FormData()
+    formData.append('title', editingTitle.value.trim())
+    const res = await fetch(`${BASE_URL}/api/${type === 'song' ? 'songs' : 'albums'}/${id}`, {
+      method: 'PATCH', headers: authHeader(), body: formData,
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      if (type === 'song') {
+        const s = myUploads.value.songs.find(s => s.id === id)
+        if (s) s.title = updated.title
+      } else {
+        const a = myUploads.value.albums.find(a => a.id === id)
+        if (a) a.title = updated.title
+      }
+      showFeedback('✓ Titel gespeichert')
+    }
+  } catch {}
+  editingId.value = null
+}
+
+function triggerCoverEdit(type, id) {
+  coverEditTarget.value = { type, id }
+  if (coverEditRef.value) coverEditRef.value.value = ''
+  coverEditRef.value?.click()
+}
+
+async function onCoverEditChange(e) {
+  const file = e.target.files?.[0]
+  if (!file || !coverEditTarget.value) return
+  const { type, id } = coverEditTarget.value
+  const formData = new FormData()
+  formData.append('cover', file)
+  try {
+    const res = await fetch(`${BASE_URL}/api/${type === 'song' ? 'songs' : 'albums'}/${id}`, {
+      method: 'PATCH', headers: authHeader(), body: formData,
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      const coverUrl = updated.cover_url
+      if (type === 'song') {
+        const s = myUploads.value.songs.find(s => s.id === id)
+        if (s) s.coverUrl = coverUrl
+      } else {
+        const a = myUploads.value.albums.find(a => a.id === id)
+        if (a) a.coverUrl = coverUrl
+      }
+      showFeedback('✓ Cover aktualisiert')
+    }
+  } catch {}
+}
+
+async function deleteUpload(type, id, title) {
+  if (!confirm(`„${title}" wirklich löschen?`)) return
+  try {
+    const endpoint = type === 'song' ? `songs/u_${id}` : `albums/${id}`
+    const res = await fetch(`${BASE_URL}/api/${endpoint}`, { method: 'DELETE', headers: authHeader() })
+    if (res.ok) {
+      if (type === 'song') myUploads.value.songs = myUploads.value.songs.filter(s => s.id !== id)
+      else myUploads.value.albums = myUploads.value.albums.filter(a => a.id !== id)
+      showFeedback('✓ Gelöscht')
+    }
+  } catch {}
+}
+
+function showFeedback(msg) {
+  uploadFeedback.value = msg
+  setTimeout(() => { uploadFeedback.value = '' }, 2500)
+}
 </script>
 
 <style scoped>
@@ -460,6 +628,33 @@ async function confirmCrop() {
 /* Logout */
 .logout-btn { position: relative; z-index: 1; margin-top: 1rem; background: none; border: 1px solid rgba(255,90,50,0.2); border-radius: 3px; color: rgba(255,90,50,0.5); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.08em; padding: 0.5rem 1.5rem; cursor: pointer; transition: all 0.2s; }
 .logout-btn:hover { color: #ff5a32; border-color: rgba(255,90,50,0.4); background: rgba(255,90,50,0.06); }
+
+/* ── My Uploads ── */
+.uploads-section { position: relative; z-index: 1; width: 100%; max-width: 460px; margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem; }
+.uploads-title { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; letter-spacing: 0.15em; color: #f0ede6; }
+.uploads-group { display: flex; flex-direction: column; gap: 0.4rem; }
+.uploads-group-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); margin-bottom: 0.2rem; }
+.upload-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 4px; transition: border-color 0.2s; }
+.upload-item:hover { border-color: rgba(240,237,230,0.12); }
+.ui-cover { width: 40px; height: 40px; border-radius: 4px; background: rgba(240,237,230,0.06); display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; position: relative; overflow: hidden; }
+.ui-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.ui-cover-icon { font-size: 1.1rem; color: rgba(240,237,230,0.3); }
+.ui-cover-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; font-size: 0.85rem; opacity: 0; transition: opacity 0.2s; }
+.ui-cover:hover .ui-cover-overlay { opacity: 1; }
+.ui-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.ui-title { font-size: 0.88rem; font-weight: 500; color: #f0ede6; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px dashed transparent; transition: border-color 0.2s; }
+.ui-title:hover { border-color: rgba(91,106,255,0.4); }
+.ui-title-input { font-size: 0.88rem; background: rgba(91,106,255,0.1); border: 1px solid rgba(91,106,255,0.4); border-radius: 3px; padding: 0.2rem 0.5rem; color: #f0ede6; font-family: 'DM Sans', sans-serif; outline: none; width: 100%; }
+.ui-artist { font-size: 0.65rem; color: rgba(240,237,230,0.3); }
+.ui-actions { display: flex; gap: 0.3rem; flex-shrink: 0; }
+.ui-btn { background: none; border: 1px solid rgba(240,237,230,0.1); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.75rem; cursor: pointer; transition: all 0.2s; }
+.ui-btn--save { color: #32c8a0; border-color: rgba(50,200,160,0.3); }
+.ui-btn--save:hover { background: rgba(50,200,160,0.1); }
+.ui-btn--cancel { color: rgba(240,237,230,0.3); }
+.ui-btn--cancel:hover { color: #ff5a32; border-color: rgba(255,90,50,0.3); }
+.ui-btn--delete { color: rgba(255,90,50,0.4); border-color: rgba(255,90,50,0.15); }
+.ui-btn--delete:hover { color: #ff5a32; border-color: rgba(255,90,50,0.4); background: rgba(255,90,50,0.06); }
+.upload-feedback { font-size: 0.78rem; color: #32c8a0; padding: 0.4rem 0; text-align: center; }
 
 /* Crop Modal */
 .crop-overlay {
