@@ -87,6 +87,7 @@ const navItems = [
   { id: 'chats',     icon: '⌲',  label: 'Chats' },
   { id: 'donation',  icon: '€',  label: 'Spende' },
   { id: 'upload',    icon: '↑',  label: 'Upload' },
+  { id: 'about',     icon: '◉',  label: 'About' },
 ]
 
 // ── Playlist Wheel — echte Daten vom Server ──
