@@ -17,6 +17,8 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:4173',
     /\.vercel\.app$/,
+    'https://nyujam.com',
+    'https://www.nyujam.com',
     process.env.FRONTEND_URL || '',
   ].filter(Boolean),
   credentials: true,
