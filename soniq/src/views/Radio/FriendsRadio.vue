@@ -135,7 +135,7 @@
               <div class="sc-info">
                 <span class="sc-name">{{ s.name }}</span>
                 <span class="sc-host">von {{ s.hostName }}</span>
-                <span class="sc-meta">{{ s.members.length }} Hörer · {{ s.currentSong?.name || 'Kein Song' }}</span>
+                <span class="sc-meta">{{ (s.listeners || s.members || []).length }} Hörer · {{ s.current_song?.name || s.currentSong?.name || 'Kein Song' }}</span>
               </div>
               <button class="sc-join" @click="joinSession(s.id)">Beitreten →</button>
             </div>
@@ -188,8 +188,6 @@ const isHost      = computed(() => session.value?.host_id === auth.user?.id)
 const voteCount   = computed(() => (session.value?.votes || []).length)
 const votesNeeded = computed(() => Math.ceil(((session.value?.listeners || []).length || 1) / 2))
 const currentSong = computed(() => session.value?.current_song || null)
-
-// ── Load ───────────────────────────────────────────────
 onMounted(async () => {
   if (!player.songs.length) await player.loadSongs()
   radioSongs.value = player.songs
