@@ -831,6 +831,22 @@ app.post('/api/radio/sessions/:id/chat', async (req, res) => {
   res.json(msg)
 })
 
+app.post('/api/radio/sessions/:id/queue', async (req, res) => {
+  const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: s } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
+  if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  const song  = req.body.song
+  if (!song)  return res.status(400).json({ error: 'Song fehlt' })
+  const queue = [...(s.queue || []), song]
+  // If no current song, set this as current
+  let current_song = s.current_song
+  let newQueue     = queue
+  if (!current_song) { current_song = queue[0]; newQueue = queue.slice(1) }
+  const { data } = await sb.from('radio_sessions').update({ queue: newQueue, current_song, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
+  res.json(data)
+})
+
 app.post('/api/radio/sessions/:id/next', async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })

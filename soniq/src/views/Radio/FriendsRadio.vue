@@ -10,7 +10,7 @@
       <div class="sv-header">
         <button class="sv-back" @click="leaveSession">← Verlassen</button>
         <div class="sv-title-wrap">
-          <h1 class="sv-title">{{ session.name }}</h1>
+          <h1 class="sv-title">{{ session.host_name }}'s Radio</h1>
           <span class="live-badge"><span class="live-dot"></span>LIVE</span>
         </div>
         <button class="sv-home" @click="router.push('/')">
@@ -35,44 +35,60 @@
         </div>
 
         <!-- Mini Player -->
-        <div class="sv-player" v-if="session.currentSong">
+        <div class="sv-player" v-if="currentSong">
           <div class="mp-cover">
-            <img v-if="session.currentSong.cover" :src="session.currentSong.cover" class="mp-cover-img" />
+            <img v-if="currentSong.cover" :src="currentSong.cover" class="mp-cover-img" />
             <span v-else class="mp-cover-icon">♩</span>
           </div>
           <div class="mp-info">
-            <span class="mp-name">{{ session.currentSong.name }}</span>
-            <span class="mp-artist">{{ session.currentSong.artist }}</span>
+            <span class="mp-name">{{ currentSong.name }}</span>
+            <span class="mp-artist">{{ currentSong.artist }}</span>
           </div>
           <div class="mp-controls">
-            <button class="mp-btn mp-play" @click="playCurrent">
-              <svg v-if="player.isPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-            </button>
+            <div class="mp-vote">
+              <button class="vote-btn" @click="voteSkip" :class="{ voted: hasVoted }">
+                ⏭ Skip {{ voteCount }}/{{ votesNeeded }}
+              </button>
+            </div>
+            <button class="host-next" v-if="isHost" @click="hostNext">Nächster →</button>
           </div>
-          <!-- Vote skip -->
-          <div class="mp-vote">
-            <button class="vote-btn" @click="voteSkip" :class="{ voted: hasVoted }">
-              ⏭ Skip {{ voteCount }}/{{ votesNeeded }}
-            </button>
-          </div>
-          <!-- Host next -->
-          <button class="host-next" v-if="isHost" @click="hostNext">Nächster Song →</button>
         </div>
         <div class="sv-player sv-player--empty" v-else>
-          <p>Keine Songs verfügbar.<br>Lade Songs über Upload hoch.</p>
+          <p>Warten auf Songs in der Warteschlange...</p>
+        </div>
+
+        <!-- Queue -->
+        <div class="sv-queue">
+          <div class="queue-header">
+            <span class="queue-title">Warteschlange ({{ (session.queue || []).length }})</span>
+          </div>
+          <div class="queue-search-wrap">
+            <input v-model="queueInput" class="queue-input" placeholder="Song zur Warteschlange hinzufügen..." @input="searchQueue" @keydown.enter="queueResults[0] && addToQueue(queueResults[0])" />
+          </div>
+          <div class="queue-results" v-if="queueResults.length">
+            <div v-for="s in queueResults" :key="s.id" class="queue-result" @click="addToQueue(s)">
+              <span class="qr-name">{{ s.name }}</span>
+              <span class="qr-artist">{{ s.artist }}</span>
+              <span class="qr-add">+</span>
+            </div>
+          </div>
+          <div class="queue-list" v-if="(session.queue || []).length">
+            <div v-for="(s, i) in (session.queue || []).slice(0, 5)" :key="i" class="queue-item">
+              <span class="qi-nr">{{ i + 1 }}</span>
+              <span class="qi-name">{{ s.name }}</span>
+              <span class="qi-artist">{{ s.artist }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Members -->
       <div class="sv-members">
-        <div v-for="m in session.members" :key="m.id" class="member-chip">
-          <div class="mc-avatar" :style="{ background: avatarColor(m.username) }">
-            <img v-if="m.avatar" :src="m.avatar" class="mc-img" />
-            <span v-else>{{ m.username.slice(0,2).toUpperCase() }}</span>
+        <div v-for="uid in (session.listeners || [])" :key="uid" class="member-chip">
+          <div class="mc-avatar" :style="{ background: avatarColor(uid) }">
+            <span>{{ uid.slice(0,2).toUpperCase() }}</span>
           </div>
-          <span class="mc-name">{{ m.username }}</span>
-          <span class="mc-host" v-if="m.id === session.hostId">♛</span>
+          <span class="mc-host" v-if="uid === session.host_id">♛</span>
         </div>
       </div>
     </div>
@@ -139,12 +155,198 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore }   from '@/stores/auth'
 import { usePlayerStore } from '@/stores/player'
-import { useSocialStore } from '@/stores/social'
 
 const router = useRouter()
 const auth   = useAuthStore()
 const player = usePlayerStore()
-const social = useSocialStore()
+
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+
+// ── State ──────────────────────────────────────────────
+const session        = ref(null)
+const sessions       = ref([])
+const radioSongs     = ref([])
+const newSessionName = ref('')
+const creating       = ref(false)
+const loadingSessions = ref(false)
+const hasVoted       = ref(false)
+const chatMessages   = ref([])
+const chatInput      = ref('')
+const chatRef        = ref(null)
+const queueInput     = ref('')
+const queueResults   = ref([])
+let   pollTimer      = null
+
+// ── Auth header ────────────────────────────────────────
+function authHeader() {
+  const token = localStorage.getItem('nyujam_token') || ''
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+}
+
+// ── Computed ───────────────────────────────────────────
+const isHost      = computed(() => session.value?.host_id === auth.user?.id)
+const voteCount   = computed(() => (session.value?.votes || []).length)
+const votesNeeded = computed(() => Math.ceil(((session.value?.listeners || []).length || 1) / 2))
+const currentSong = computed(() => session.value?.current_song || null)
+
+// ── Load ───────────────────────────────────────────────
+onMounted(async () => {
+  if (!player.songs.length) await player.loadSongs()
+  radioSongs.value = player.songs
+  await loadSessions()
+})
+onUnmounted(() => clearInterval(pollTimer))
+
+async function loadSessions() {
+  if (!auth.isLoggedIn) return
+  loadingSessions.value = true
+  try {
+    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, { headers: authHeader() })
+    sessions.value = await res.json()
+  } catch {} finally { loadingSessions.value = false }
+}
+
+// ── Session management ─────────────────────────────────
+async function createSession() {
+  if (creating.value || !auth.isLoggedIn) return
+  creating.value = true
+  try {
+    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, {
+      method: 'POST', headers: authHeader(),
+      body: JSON.stringify({ isPublic: true }),
+    })
+    const s = await res.json()
+    if (s.error) { alert(s.error); return }
+    enterSession(s)
+  } catch (e) { alert(e.message) }
+  finally { creating.value = false }
+}
+
+async function joinSession(id) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/radio/sessions/${id}/join`, {
+      method: 'POST', headers: authHeader(),
+    })
+    const s = await res.json()
+    if (s.error) { alert(s.error); return }
+    enterSession(s)
+  } catch (e) { alert(e.message) }
+}
+
+function enterSession(s) {
+  session.value  = s
+  hasVoted.value = false
+  chatMessages.value = (s.chat_messages || [])
+  addSystemMsg(`Du bist der Session beigetreten`)
+  // Start polling
+  clearInterval(pollTimer)
+  pollTimer = setInterval(pollSession, 3000)
+}
+
+async function pollSession() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}`, { headers: authHeader() })
+    if (!res.ok) { session.value = null; clearInterval(pollTimer); return }
+    const updated = await res.json()
+    // Check if song changed
+    if (updated.current_song?.id !== session.value.current_song?.id) {
+      hasVoted.value = false
+      if (updated.current_song) addSystemMsg(`▶ ${updated.current_song.name} — ${updated.current_song.artist}`)
+    }
+    // Sync chat messages
+    chatMessages.value = updated.chat_messages || []
+    session.value = updated
+  } catch {}
+}
+
+async function leaveSession() {
+  if (!session.value) return
+  clearInterval(pollTimer)
+  await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/leave`, {
+    method: 'POST', headers: authHeader(),
+  }).catch(() => {})
+  session.value = null
+  chatMessages.value = []
+  queueResults.value = []
+}
+
+// ── Queue ──────────────────────────────────────────────
+function searchQueue() {
+  const q = queueInput.value.trim().toLowerCase()
+  if (!q) { queueResults.value = []; return }
+  queueResults.value = player.songs
+    .filter(s => s.name.toLowerCase().includes(q) || s.artist.toLowerCase().includes(q))
+    .slice(0, 5)
+}
+
+async function addToQueue(song) {
+  if (!session.value) return
+  queueInput.value   = ''
+  queueResults.value = []
+  // Add song to queue via next endpoint workaround — update queue directly
+  const current = session.value
+  const newQueue = [...(current.queue || []), { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }]
+  // Use a dedicated add-to-queue endpoint or patch via vote trick
+  await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/queue`, {
+    method: 'POST', headers: authHeader(),
+    body: JSON.stringify({ song: { id: song.id, name: song.name, artist: song.artist, cover: song.cover || null, url: song.url } }),
+  }).catch(() => {})
+  addSystemMsg(`🎵 ${song.artist} — ${song.name} zur Warteschlange hinzugefügt`)
+  await pollSession()
+}
+
+// ── Playback ───────────────────────────────────────────
+async function voteSkip() {
+  if (hasVoted.value || !session.value) return
+  hasVoted.value = true
+  try {
+    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/vote`, {
+      method: 'POST', headers: authHeader(),
+    })
+    const updated = await res.json()
+    session.value = updated
+    if (updated.skipped) addSystemMsg('⏭ Song übersprungen')
+  } catch { hasVoted.value = false }
+}
+
+async function hostNext() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/next`, {
+      method: 'POST', headers: authHeader(),
+    })
+    const updated = await res.json()
+    session.value  = updated
+    hasVoted.value = false
+    if (updated.current_song) addSystemMsg(`⏭ ${updated.current_song.name} — ${updated.current_song.artist}`)
+  } catch {}
+}
+
+// ── Chat ───────────────────────────────────────────────
+function addSystemMsg(text) {
+  chatMessages.value.push({ id: Date.now().toString(), system: true, text, createdAt: new Date().toISOString() })
+  nextTick(() => { if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight })
+}
+
+async function sendChat() {
+  const text = chatInput.value.trim()
+  if (!text || !session.value) return
+  chatInput.value = ''
+  try {
+    await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/chat`, {
+      method: 'POST', headers: authHeader(),
+      body: JSON.stringify({ text }),
+    })
+    await pollSession()
+  } catch {}
+  nextTick(() => { if (chatRef.value) chatRef.value.scrollTop = chatRef.value.scrollHeight })
+}
+
+// ── Helpers ────────────────────────────────────────────
+const avatarColors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
+function avatarColor(name) { return avatarColors[(name?.charCodeAt(0) || 0) % avatarColors.length] }
+</script>
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
@@ -410,6 +612,24 @@ function avatarColor(name) { return avatarColors[name.charCodeAt(0) % avatarColo
 .mc-name { font-size: 0.75rem; color: rgba(240,237,230,0.7); }
 .mc-host { font-size: 0.65rem; color: #f0c832; }
 
+.sv-queue { width: 100%; max-width: 700px; margin-top: 1rem; padding: 0 1rem; }
+.queue-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; }
+.queue-title { font-size: 0.7rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); }
+.queue-search-wrap { margin-bottom: 0.4rem; }
+.queue-input { width: 100%; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); border-radius: 3px; padding: 0.6rem 1rem; font-family: 'DM Sans', sans-serif; font-size: 0.85rem; color: #f0ede6; outline: none; transition: border-color 0.2s; }
+.queue-input:focus { border-color: rgba(91,106,255,0.4); }
+.queue-input::placeholder { color: rgba(240,237,230,0.2); }
+.queue-results { display: flex; flex-direction: column; gap: 0.25rem; margin-bottom: 0.5rem; }
+.queue-result { display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.08); border-radius: 3px; cursor: pointer; transition: background 0.15s; }
+.queue-result:hover { background: rgba(91,106,255,0.1); border-color: rgba(91,106,255,0.3); }
+.qr-name { flex: 1; font-size: 0.85rem; font-weight: 500; color: #f0ede6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qr-artist { font-size: 0.72rem; color: rgba(240,237,230,0.35); flex-shrink: 0; }
+.qr-add { font-size: 1rem; color: #5b6aff; flex-shrink: 0; font-weight: 600; }
+.queue-list { display: flex; flex-direction: column; gap: 0.2rem; }
+.queue-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.45rem 0.75rem; border-radius: 3px; background: rgba(240,237,230,0.02); }
+.qi-nr { font-size: 0.68rem; color: rgba(240,237,230,0.2); width: 1rem; text-align: center; flex-shrink: 0; }
+.qi-name { flex: 1; font-size: 0.82rem; color: rgba(240,237,230,0.6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qi-artist { font-size: 0.68rem; color: rgba(240,237,230,0.3); flex-shrink: 0; }
 @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
 @keyframes spin { to { transform: rotate(360deg); } }
