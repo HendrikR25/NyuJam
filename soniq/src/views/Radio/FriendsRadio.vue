@@ -127,7 +127,7 @@
           <button class="cc-btn" :class="{ loading: creating }" @click="createSession" :disabled="creating">
             {{ creating ? 'Erstelle...' : '+ Session erstellen' }}
           </button>
-          <p class="cc-hint" v-if="!radioSongs.length">⚠ Keine Songs verfügbar — lade zuerst Songs über Upload hoch.</p>
+          <p class="cc-hint" v-if="!player.songs.length">⚠ Keine Songs verfügbar — lade zuerst Songs über Upload hoch.</p>
         </div>
 
         <!-- Active sessions -->
