@@ -78,6 +78,10 @@
             </span>
             <span v-else class="sr-idx">{{ idx + 1 }}</span>
           </div>
+          <div class="sr-cover">
+            <img v-if="song.cover" :src="song.cover" class="sr-cover-img" />
+            <span v-else class="sr-cover-icon">♩</span>
+          </div>
           <div class="sr-info">
             <span class="sr-name" :class="{ 'sr-name--playing': player.currentSong?.id === song.id }">{{ song.name }}</span>
             <span class="sr-meta">{{ song.album }} · {{ song.year }}</span>
@@ -330,6 +334,9 @@ function playSong(song) {
 .song-row:hover { background: rgba(240,237,230,0.04); }
 .song-row.active { background: color-mix(in srgb, var(--color) 8%, transparent); }
 .sr-num { width: 22px; flex-shrink: 0; text-align: center; }
+.sr-cover { width: 36px; height: 36px; border-radius: 3px; background: rgba(240,237,230,0.06); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 0.9rem; color: rgba(240,237,230,0.3); }
+.sr-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.sr-cover-icon { font-size: 0.9rem; }
 .sr-idx { font-size: 0.7rem; color: rgba(240,237,230,0.22); }
 .sr-wave { display: flex; align-items: flex-end; gap: 1.5px; height: 14px; justify-content: center; }
 .sr-wave span { display: block; width: 2.5px; border-radius: 2px; background: var(--color); animation: waveBar 0.7s ease-in-out infinite; }

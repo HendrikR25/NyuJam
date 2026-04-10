@@ -66,7 +66,8 @@
             @click="activeTab === 'songs' ? playSong(item) : goToArtist(item)"
           >
             <div class="card-thumb">
-              <span class="card-thumb-icon">{{ activeTab === 'songs' ? '♩' : '◉' }}</span>
+              <img v-if="activeTab === 'songs' && item.cover" :src="item.cover" class="card-thumb-img" />
+              <span v-else class="card-thumb-icon">{{ activeTab === 'songs' ? '♩' : '◉' }}</span>
             </div>
             <div class="card-info">
               <div class="card-title-real">{{ item.name }}</div>
@@ -507,7 +508,9 @@ kbd {
   border-radius: 2px;
   display: flex; align-items: center; justify-content: center;
   font-size: 1.2rem;
+  overflow: hidden;
 }
+.card-thumb-img { width: 100%; height: 100%; object-fit: cover; }
 
 .card-info { flex: 1; display: flex; flex-direction: column; gap: 0.4rem; }
 
