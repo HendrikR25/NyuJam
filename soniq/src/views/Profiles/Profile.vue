@@ -229,7 +229,10 @@
 
       <!-- ── My Uploads ── -->
       <div class="uploads-section" v-if="myUploads.songs.length || myUploads.albums.length">
-        <h2 class="uploads-title">Meine Uploads</h2>
+        <h2 class="uploads-title">
+          {{ myUploads.isAdmin ? 'Alle Uploads' : 'Meine Uploads' }}
+          <span class="admin-badge" v-if="myUploads.isAdmin">⚡ Admin</span>
+        </h2>
 
         <!-- Songs -->
         <div class="uploads-group" v-if="myUploads.songs.length">
@@ -551,7 +554,7 @@ async function changePassword() {
   finally { changingPw.value = false }
 }
 const BASE_URL      = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-const myUploads     = ref({ songs: [], albums: [] })
+const myUploads     = ref({ songs: [], albums: [], isAdmin: false })
 const editingId     = ref(null)
 const editingTitle  = ref('')
 const editingType   = ref(null)
@@ -743,7 +746,8 @@ function showFeedback(msg) {
 
 /* ── My Uploads ── */
 .uploads-section { position: relative; z-index: 1; width: 100%; max-width: 460px; margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem; }
-.uploads-title { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; letter-spacing: 0.15em; color: #f0ede6; }
+.uploads-title { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; letter-spacing: 0.15em; color: #f0ede6; display: flex; align-items: center; gap: 0.6rem; }
+.admin-badge { font-family: 'DM Sans', sans-serif; font-size: 0.65rem; letter-spacing: 0.1em; background: rgba(240,200,50,0.12); border: 1px solid rgba(240,200,50,0.3); color: #f0c832; border-radius: 3px; padding: 0.15rem 0.5rem; font-weight: 600; }
 .uploads-group { display: flex; flex-direction: column; gap: 0.4rem; }
 .uploads-group-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); margin-bottom: 0.2rem; }
 .upload-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 4px; transition: border-color 0.2s; }
