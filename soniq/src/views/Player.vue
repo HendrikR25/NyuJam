@@ -48,20 +48,112 @@
         <span class="time-current">{{ player.formatTime(player.currentTime) }}</span>
         <div class="meta-right">
           <span class="time-total">{{ player.formatTime(player.duration) }}</span>
-          <button class="chat-btn" title="Chat" @click="router.push('/chats')">
+          <button class="chat-btn" :class="{ active: showComments }" title="Kommentare" @click="toggleComments">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="chat-btn-count" v-if="comments.length">{{ comments.length }}</span>
           </button>
         </div>
       </div>
+
+      <!-- Timestamp comment overlay -->
+      <transition name="ts-comment">
+        <div class="ts-comment-overlay" v-if="activeTimestampComment">
+          <div class="ts-comment-inner">
+            <span class="ts-comment-user">{{ activeTimestampComment.username }}</span>
+            <span class="ts-comment-text">{{ activeTimestampComment.text }}</span>
+          </div>
+        </div>
+      </transition>
 
       <!-- Scrubber -->
       <div class="scrubber" ref="scrubberRef" @mousedown="startScrub" @touchstart.prevent="startScrub">
         <div class="scrubber-track">
           <div class="scrubber-fill" :style="{ width: player.progressPct + '%' }"></div>
+          <!-- Timestamp markers -->
+          <div
+            v-for="c in timestampComments" :key="c.id"
+            class="ts-marker"
+            :style="{ left: (c.timestampSec / player.duration * 100) + '%' }"
+            :title="c.username + ': ' + c.text"
+          ></div>
         </div>
         <div class="scrubber-dot" :style="{ left: player.progressPct + '%' }"></div>
       </div>
     </div>
+
+    <!-- Comments Panel -->
+    <transition name="comments-slide">
+      <div class="comments-panel" v-if="showComments">
+        <div class="cp-header">
+          <span class="cp-title">Kommentare ({{ comments.length }})</span>
+          <button class="cp-close" @click="showComments = false">✕</button>
+        </div>
+
+        <!-- Write comment -->
+        <div class="cp-write" v-if="auth.isLoggedIn">
+          <textarea
+            v-model="newComment"
+            class="cp-input"
+            placeholder="Kommentar schreiben..."
+            rows="2"
+            maxlength="300"
+            @keydown.ctrl.enter="submitComment"
+          ></textarea>
+          <div class="cp-write-footer">
+            <div class="cp-timestamp-wrap">
+              <button class="cp-ts-btn" @click="insertCurrentTime" title="Aktuelle Zeit einfügen">
+                ⏱ {{ player.formatTime(player.currentTime) }}
+              </button>
+              <input
+                v-model="newTimestamp"
+                class="cp-ts-input"
+                placeholder="z.B. 1:23"
+                maxlength="7"
+              />
+              <button class="cp-ts-clear" v-if="newTimestamp" @click="newTimestamp = ''">✕</button>
+            </div>
+            <button class="cp-submit" :disabled="!newComment.trim() || submitting" @click="submitComment">
+              <span v-if="submitting">...</span>
+              <span v-else>↑ Senden</span>
+            </button>
+          </div>
+        </div>
+        <div class="cp-login-hint" v-else>
+          <button @click="router.push('/profile')">Anmelden um zu kommentieren →</button>
+        </div>
+
+        <!-- Comments list -->
+        <div class="cp-list" v-if="comments.length">
+          <div v-for="c in comments" :key="c.id" class="cp-comment">
+            <div class="cc-avatar" :style="{ background: avatarColor(c.username) }">
+              <img v-if="c.avatar" :src="c.avatar" class="cc-avatar-img" />
+              <span v-else>{{ c.username.slice(0,2).toUpperCase() }}</span>
+            </div>
+            <div class="cc-body">
+              <div class="cc-header">
+                <span class="cc-username">{{ c.username }}</span>
+                <button class="cc-ts" v-if="c.timestampSec !== null && c.timestampSec !== undefined" @click="seekTo(c.timestampSec)">
+                  ⏱ {{ formatTimestamp(c.timestampSec) }}
+                </button>
+                <span class="cc-date">{{ formatDate(c.createdAt) }}</span>
+              </div>
+              <p class="cc-text">{{ c.text }}</p>
+              <div class="cc-actions">
+                <button class="cc-like" :class="{ liked: c.isLiked }" @click="toggleLike(c)">
+                  <svg width="12" height="12" viewBox="0 0 24 24" :fill="c.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  {{ c.likes }}
+                </button>
+                <button class="cc-delete" v-if="auth.user?.id === c.userId || auth.user?.is_admin" @click="deleteComment(c.id)">🗑</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="cp-empty" v-else-if="!loadingComments">
+          <span>Noch keine Kommentare — sei der Erste!</span>
+        </div>
+        <div class="cp-empty" v-else>Lädt...</div>
+      </div>
+    </transition>
 
     <!-- Controls -->
     <div class="controls">
@@ -197,7 +289,7 @@
 
 <script setup>
 import AdBanner from '@/components/AdBanner.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'
@@ -208,6 +300,134 @@ const route          = useRoute()
 const player         = usePlayerStore()
 const playlistsStore = usePlaylistsStore()
 const auth           = useAuthStore()
+
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+function authHeader() {
+  const t = localStorage.getItem('nyujam_token') || ''
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
+}
+
+// ── Comments ───────────────────────────────────────────
+const showComments           = ref(false)
+const comments               = ref([])
+const loadingComments        = ref(false)
+const newComment             = ref('')
+const newTimestamp           = ref('')
+const submitting             = ref(false)
+const activeTimestampComment = ref(null)
+let   tsTimer                = null
+let   lastShownCommentId     = null
+
+const timestampComments = computed(() =>
+  comments.value.filter(c => c.timestampSec !== null && c.timestampSec !== undefined && player.duration > 0)
+)
+
+async function loadComments() {
+  if (!player.currentSong) return
+  loadingComments.value = true
+  try {
+    const id  = player.currentSong.id
+    const res = await fetch(`${BASE_URL}/api/comments/${id}`, { headers: authHeader() })
+    comments.value = await res.json()
+  } catch {} finally { loadingComments.value = false }
+}
+
+async function toggleComments() {
+  showComments.value = !showComments.value
+  if (showComments.value && !comments.value.length) await loadComments()
+}
+
+async function submitComment() {
+  if (!newComment.value.trim() || submitting.value) return
+  submitting.value = true
+  try {
+    const tsRaw  = newTimestamp.value.trim()
+    const tsSec  = tsRaw ? parseTimestamp(tsRaw) : null
+    const id     = player.currentSong?.id
+    const res    = await fetch(`${BASE_URL}/api/comments/${id}`, {
+      method: 'POST', headers: authHeader(),
+      body: JSON.stringify({ text: newComment.value.trim(), timestampSec: tsSec }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      comments.value = [data, ...comments.value].sort((a, b) => b.likes - a.likes)
+      newComment.value   = ''
+      newTimestamp.value = ''
+    }
+  } catch {} finally { submitting.value = false }
+}
+
+async function toggleLike(c) {
+  if (!auth.isLoggedIn) return
+  const wasLiked = c.isLiked
+  c.isLiked = !wasLiked
+  c.likes   = wasLiked ? c.likes - 1 : c.likes + 1
+  await fetch(`${BASE_URL}/api/comments/${c.id}/like`, {
+    method: wasLiked ? 'DELETE' : 'POST', headers: authHeader(),
+  }).catch(() => { c.isLiked = wasLiked; c.likes = wasLiked ? c.likes + 1 : c.likes - 1 })
+  comments.value = [...comments.value].sort((a, b) => b.likes - a.likes)
+}
+
+async function deleteComment(id) {
+  if (!confirm('Kommentar löschen?')) return
+  await fetch(`${BASE_URL}/api/comments/${id}`, { method: 'DELETE', headers: authHeader() })
+  comments.value = comments.value.filter(c => c.id !== id)
+}
+
+function insertCurrentTime() {
+  newTimestamp.value = formatTimestamp(Math.floor(player.currentTime))
+}
+
+function seekTo(sec) {
+  if (player.audioEl) { player.audioEl.currentTime = sec }
+}
+
+function parseTimestamp(str) {
+  const parts = str.split(':').map(Number)
+  if (parts.length === 2) return parts[0] * 60 + parts[1]
+  if (parts.length === 1) return parts[0]
+  return null
+}
+
+function formatTimestamp(sec) {
+  const m = Math.floor(sec / 60)
+  const s = Math.floor(sec % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+function formatDate(iso) {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+function avatarColor(name) {
+  const colors = ['#5b6aff','#32c8a0','#ff5a32','#c864f0','#f0c832']
+  return colors[name?.charCodeAt(0) % colors.length] || colors[0]
+}
+
+// Watch for timestamp comments while playing
+watch(() => player.currentTime, (t) => {
+  if (!timestampComments.value.length) return
+  const sec = Math.floor(t)
+  const hit = timestampComments.value.find(c =>
+    Math.abs(c.timestampSec - sec) < 1 && c.id !== lastShownCommentId
+  )
+  if (hit) {
+    lastShownCommentId      = hit.id
+    activeTimestampComment.value = hit
+    clearTimeout(tsTimer)
+    tsTimer = setTimeout(() => { activeTimestampComment.value = null }, 5000)
+  }
+})
+
+// Reload comments when song changes
+watch(() => player.currentSong?.id, () => {
+  comments.value = []
+  activeTimestampComment.value = null
+  lastShownCommentId = null
+  if (showComments.value) loadComments()
+})
 
 onMounted(() => {
   if (!player.songs.length)             player.loadSongs()
@@ -401,8 +621,63 @@ function endScrub() {
 .progress-meta { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.65rem; }
 .time-current, .time-total { font-size: 0.72rem; letter-spacing: 0.08em; color: rgba(240,237,230,0.35); font-variant-numeric: tabular-nums; }
 .meta-right { display: flex; align-items: center; gap: 0.75rem; }
-.chat-btn { background: rgba(240,237,230,0.06); border: 1px solid rgba(240,237,230,0.1); border-radius: 6px; padding: 0.35rem 0.45rem; color: rgba(240,237,230,0.45); cursor: pointer; display: flex; align-items: center; transition: color 0.2s, border-color 0.2s; line-height: 0; }
-.chat-btn:hover { color: #f0ede6; border-color: rgba(240,237,230,0.25); }
+.chat-btn { background: rgba(240,237,230,0.06); border: 1px solid rgba(240,237,230,0.1); border-radius: 6px; padding: 0.35rem 0.45rem; color: rgba(240,237,230,0.45); cursor: pointer; display: flex; align-items: center; gap: 0.3rem; transition: color 0.2s, border-color 0.2s; line-height: 0; position: relative; }
+.chat-btn:hover, .chat-btn.active { color: #f0ede6; border-color: rgba(240,237,230,0.25); }
+.chat-btn.active { background: rgba(91,106,255,0.12); border-color: rgba(91,106,255,0.3); color: #5b6aff; }
+.chat-btn-count { font-size: 0.65rem; font-family: 'DM Sans', sans-serif; line-height: 1; }
+
+/* Timestamp markers */
+.ts-marker { position: absolute; width: 3px; height: 3px; border-radius: 50%; background: #f0c832; top: 50%; transform: translate(-50%, -50%); opacity: 0.8; }
+
+/* Timestamp comment overlay */
+.ts-comment-overlay { position: absolute; bottom: calc(100% + 8px); left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; z-index: 10; }
+.ts-comment-inner { background: rgba(14,14,24,0.92); border: 1px solid rgba(240,200,50,0.3); border-radius: 6px; padding: 0.5rem 0.85rem; display: flex; gap: 0.5rem; align-items: center; max-width: 90%; backdrop-filter: blur(8px); }
+.ts-comment-user { font-size: 0.68rem; color: #f0c832; font-weight: 600; flex-shrink: 0; }
+.ts-comment-text { font-size: 0.78rem; color: rgba(240,237,230,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ts-comment-enter-active, .ts-comment-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.ts-comment-enter-from, .ts-comment-leave-to { opacity: 0; transform: translateY(4px); }
+
+/* Comments panel */
+.comments-panel { position: relative; z-index: 1; width: 100%; max-width: 480px; background: rgba(10,10,15,0.95); border: 1px solid rgba(240,237,230,0.08); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; max-height: 60vh; margin-top: 1rem; }
+.cp-header { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1rem; border-bottom: 1px solid rgba(240,237,230,0.07); flex-shrink: 0; }
+.cp-title { font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.4); }
+.cp-close { background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 0.85rem; transition: color 0.2s; }
+.cp-close:hover { color: #ff5a32; }
+.cp-write { padding: 0.85rem 1rem; border-bottom: 1px solid rgba(240,237,230,0.07); flex-shrink: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.cp-input { background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); border-radius: 4px; padding: 0.6rem 0.75rem; color: #f0ede6; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; resize: none; outline: none; width: 100%; }
+.cp-input:focus { border-color: rgba(91,106,255,0.35); }
+.cp-input::placeholder { color: rgba(240,237,230,0.2); }
+.cp-write-footer { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.cp-timestamp-wrap { display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; }
+.cp-ts-btn { background: rgba(240,200,50,0.08); border: 1px solid rgba(240,200,50,0.2); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.68rem; color: #f0c832; cursor: pointer; white-space: nowrap; transition: background 0.2s; }
+.cp-ts-btn:hover { background: rgba(240,200,50,0.15); }
+.cp-ts-input { background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); border-radius: 3px; padding: 0.25rem 0.5rem; font-size: 0.72rem; color: #f0ede6; font-family: 'DM Sans', sans-serif; outline: none; width: 60px; }
+.cp-ts-clear { background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; font-size: 0.65rem; }
+.cp-submit { background: #5b6aff; border: none; border-radius: 3px; padding: 0.35rem 0.85rem; font-family: 'Bebas Neue', cursive; font-size: 0.8rem; letter-spacing: 0.1em; color: white; cursor: pointer; flex-shrink: 0; transition: opacity 0.2s; }
+.cp-submit:disabled { opacity: 0.4; cursor: default; }
+.cp-login-hint { padding: 0.75rem 1rem; border-bottom: 1px solid rgba(240,237,230,0.07); }
+.cp-login-hint button { background: none; border: none; color: rgba(91,106,255,0.7); font-size: 0.8rem; cursor: pointer; }
+.cp-list { overflow-y: auto; flex: 1; }
+.cp-empty { padding: 1.5rem; text-align: center; font-size: 0.75rem; color: rgba(240,237,230,0.2); }
+.cp-comment { display: flex; gap: 0.7rem; padding: 0.8rem 1rem; border-bottom: 1px solid rgba(240,237,230,0.04); }
+.cp-comment:last-child { border-bottom: none; }
+.cc-avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 600; color: white; flex-shrink: 0; overflow: hidden; }
+.cc-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+.cc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.cc-header { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.cc-username { font-size: 0.75rem; font-weight: 600; color: #f0ede6; }
+.cc-ts { background: rgba(240,200,50,0.08); border: 1px solid rgba(240,200,50,0.2); border-radius: 3px; padding: 0.1rem 0.4rem; font-size: 0.62rem; color: #f0c832; cursor: pointer; transition: background 0.2s; }
+.cc-ts:hover { background: rgba(240,200,50,0.18); }
+.cc-date { font-size: 0.62rem; color: rgba(240,237,230,0.2); margin-left: auto; }
+.cc-text { font-size: 0.8rem; color: rgba(240,237,230,0.65); line-height: 1.55; word-break: break-word; }
+.cc-actions { display: flex; align-items: center; gap: 0.5rem; }
+.cc-like { background: none; border: none; color: rgba(240,237,230,0.3); cursor: pointer; display: flex; align-items: center; gap: 0.3rem; font-size: 0.7rem; transition: color 0.2s; padding: 0; }
+.cc-like:hover { color: #ff5a32; }
+.cc-like.liked { color: #ff5a32; }
+.cc-delete { background: none; border: none; color: rgba(240,237,230,0.15); cursor: pointer; font-size: 0.7rem; transition: color 0.2s; }
+.cc-delete:hover { color: #ff5a32; }
+.comments-slide-enter-active, .comments-slide-leave-active { transition: opacity 0.25s, transform 0.25s; }
+.comments-slide-enter-from, .comments-slide-leave-to { opacity: 0; transform: translateY(8px); }
 
 .scrubber { position: relative; height: 20px; display: flex; align-items: center; cursor: pointer; }
 .scrubber-track { position: absolute; left: 0; right: 0; height: 3px; background: rgba(240,237,230,0.1); border-radius: 99px; overflow: hidden; }

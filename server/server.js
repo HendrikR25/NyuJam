@@ -934,6 +934,83 @@ app.post('/api/donations/webhook', express.raw({ type: 'application/json' }), (r
   }
 })
 
+// ── Song Comments ──────────────────────────────────────
+app.get('/api/comments/:songId', async (req, res) => {
+  const songId = req.params.songId.replace(/^u_/, '')
+  const { data: comments } = await sb.from('song_comments')
+    .select('*, comment_likes(count)')
+    .eq('song_id', songId)
+    .order('created_at', { ascending: false })
+
+  // Get current user's likes
+  const user = await getUserFromToken(req)
+  let likedIds = new Set()
+  if (user) {
+    const { data: likes } = await sb.from('comment_likes').select('comment_id').eq('user_id', user.id)
+    likedIds = new Set((likes || []).map(l => l.comment_id))
+  }
+
+  const result = (comments || []).map(c => ({
+    id:           c.id,
+    songId:       c.song_id,
+    userId:       c.user_id,
+    username:     c.username,
+    avatar:       c.avatar,
+    text:         c.text,
+    timestampSec: c.timestamp_sec,
+    likes:        c.comment_likes?.[0]?.count || 0,
+    isLiked:      likedIds.has(c.id),
+    createdAt:    c.created_at,
+  })).sort((a, b) => b.likes - a.likes)
+
+  res.json(result)
+})
+
+app.post('/api/comments/:songId', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const songId = req.params.songId.replace(/^u_/, '')
+  const { text, timestampSec } = req.body
+  if (!text?.trim()) return res.status(400).json({ error: 'Text fehlt' })
+  if (text.trim().length > 300) return res.status(400).json({ error: 'Max. 300 Zeichen' })
+
+  const { data, error } = await sb.from('song_comments').insert({
+    song_id:       songId,
+    user_id:       user.id,
+    username:      user.username,
+    avatar:        user.avatar || null,
+    text:          text.trim(),
+    timestamp_sec: (timestampSec !== undefined && timestampSec !== null && timestampSec !== '') ? parseInt(timestampSec) : null,
+  }).select().single()
+
+  if (error) return res.status(500).json({ error: error.message })
+  res.status(201).json({ ...data, likes: 0, isLiked: false })
+})
+
+app.post('/api/comments/:commentId/like', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('comment_likes').upsert({ comment_id: req.params.commentId, user_id: user.id }, { onConflict: 'comment_id,user_id' })
+  res.json({ ok: true })
+})
+
+app.delete('/api/comments/:commentId/like', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('comment_likes').delete().eq('comment_id', req.params.commentId).eq('user_id', user.id)
+  res.json({ ok: true })
+})
+
+app.delete('/api/comments/:commentId', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: c } = await sb.from('song_comments').select('user_id').eq('id', req.params.commentId).single()
+  if (!c) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (!user.is_admin && c.user_id !== user.id) return res.status(403).json({ error: 'Keine Berechtigung' })
+  await sb.from('song_comments').delete().eq('id', req.params.commentId)
+  res.json({ ok: true })
+})
+
 // ── Country Radio ──────────────────────────────────────
 
 const COUNTRY_TIMEZONES = {

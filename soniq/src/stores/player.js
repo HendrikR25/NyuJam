@@ -195,5 +195,7 @@ export const usePlayerStore = defineStore('player', () => {
     // actions
     loadSongs, loadFavorites, play, togglePlay,
     seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong,
+    // expose audio element for seek
+    get audioEl() { return getAudio() },
   }
 })
