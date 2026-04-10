@@ -168,7 +168,7 @@ function navigate(id) {
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 .home {
-  min-height: 100vh;
+  height: 100vh;
   background: #0a0a0f;
   color: #f0ede6;
   font-family: 'DM Sans', sans-serif;
@@ -176,7 +176,7 @@ function navigate(id) {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 1.5rem 2rem;
+  padding: 0 clamp(1rem, 3vw, 2rem);
   position: relative;
   overflow: hidden;
 }
@@ -185,30 +185,30 @@ function navigate(id) {
 .ad-banner {
   position: relative;
   width: 100%;
-  max-width: 728px;
-  min-height: 90px;
-  margin-bottom: 2rem;
+  max-width: min(520px, 90vw);
+  min-height: clamp(50px, 8vh, 90px);
+  margin-bottom: clamp(0.5rem, 1.5vh, 1.5rem);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   border-bottom: 1px solid rgba(240,237,230,0.07);
-  padding: 0.75rem 0;
+  padding: clamp(0.25rem, 0.5vh, 0.75rem) 0;
   align-self: center;
+  flex-shrink: 0;
 }
 .ad-label {
   position: absolute;
-  top: 4px;
+  top: 2px;
   left: 0;
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: rgba(240,237,230,0.2);
 }
 .ad-placeholder {
   width: 100%;
-  max-width: 728px;
-  height: 90px;
+  height: clamp(50px, 8vh, 90px);
   background: rgba(240,237,230,0.03);
   border: 1px dashed rgba(240,237,230,0.1);
   border-radius: 2px;
@@ -239,13 +239,14 @@ function navigate(id) {
 .header {
   position: relative; z-index: 1;
   text-align: center;
-  margin-bottom: 3.5rem;
+  margin-bottom: clamp(0.75rem, 2vh, 2rem);
   animation: fadeDown 0.6s ease both;
-  width: 100%; max-width: 420px;
+  width: 100%; max-width: min(520px, 90vw);
+  flex-shrink: 0;
 }
 .profile-btn {
   position: absolute; top: 0; right: 0;
-  width: 38px; height: 38px; border-radius: 50%;
+  width: clamp(30px, 4vw, 38px); height: clamp(30px, 4vw, 38px); border-radius: 50%;
   background: rgba(240,237,230,0.06);
   border: 1px solid rgba(240,237,230,0.12);
   color: rgba(240,237,230,0.4);
@@ -257,38 +258,39 @@ function navigate(id) {
 .pb-img { width: 100%; height: 100%; object-fit: cover; }
 .pb-initials { font-size: 0.65rem; font-weight: 700; color: #f0ede6; }
 .logo {
-  display: flex; align-items: center; gap: 0.5rem;
+  display: flex; align-items: center; gap: 0.4rem;
   justify-content: center;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0.2rem;
 }
 .logo-icon {
-  font-size: 1.8rem;
+  font-size: clamp(1.3rem, 3vw, 1.8rem);
   color: #ff5a32;
   line-height: 1;
 }
 .logo-text {
   font-family: 'Bebas Neue', cursive;
-  font-size: 2.8rem;
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
   letter-spacing: 0.18em;
   color: #f0ede6;
   line-height: 1;
 }
 .header-sub {
-  font-size: 0.75rem;
+  font-size: clamp(0.58rem, 1.2vw, 0.75rem);
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: rgba(240,237,230,0.35);
   font-weight: 300;
 }
 
-/* ── Nav Grid ── */
+/* ── Nav Grid — 2 columns ── */
 .nav-grid {
   position: relative; z-index: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(0.35rem, 1vh, 0.65rem);
   width: 100%;
-  max-width: 420px;
+  max-width: min(520px, 90vw);
+  flex-shrink: 0;
 }
 
 .nav-btn {
@@ -297,10 +299,10 @@ function navigate(id) {
   border: none;
   cursor: pointer;
   padding: 0;
-  border-radius: 2px;
+  border-radius: 4px;
   outline: none;
   opacity: 0;
-  transform: translateY(12px);
+  transform: translateY(10px);
   animation: slideUp 0.5s ease forwards;
   animation-delay: var(--delay);
 }
@@ -309,7 +311,7 @@ function navigate(id) {
   position: absolute; inset: 0;
   background: rgba(240,237,230,0.04);
   border: 1px solid rgba(240,237,230,0.08);
-  border-radius: 2px;
+  border-radius: 4px;
   transition: background 0.25s, border-color 0.25s;
 }
 .nav-btn:hover .btn-bg {
@@ -321,17 +323,18 @@ function navigate(id) {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 1.1rem 1.5rem;
+  gap: clamp(0.4rem, 1vw, 0.75rem);
+  padding: clamp(0.6rem, 1.8vh, 1rem) clamp(0.75rem, 2vw, 1.25rem);
 }
 
 .btn-icon {
-  font-size: 1.25rem;
-  width: 1.5rem;
+  font-size: clamp(0.9rem, 2vw, 1.15rem);
+  width: 1.2rem;
   text-align: center;
   color: #ff5a32;
   opacity: 0.8;
   transition: opacity 0.2s, transform 0.2s;
+  flex-shrink: 0;
 }
 .nav-btn:hover .btn-icon {
   opacity: 1;
@@ -340,8 +343,8 @@ function navigate(id) {
 
 .btn-label {
   font-family: 'Bebas Neue', cursive;
-  font-size: 1.55rem;
-  letter-spacing: 0.12em;
+  font-size: clamp(0.95rem, 2.5vw, 1.25rem);
+  letter-spacing: 0.1em;
   color: #f0ede6;
   flex: 1;
   text-align: left;
@@ -352,7 +355,7 @@ function navigate(id) {
 }
 
 .btn-arrow {
-  font-size: 0.9rem;
+  font-size: clamp(0.65rem, 1.2vw, 0.8rem);
   color: rgba(240,237,230,0.2);
   transition: color 0.2s, transform 0.25s;
 }
