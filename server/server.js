@@ -321,25 +321,15 @@ app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), as
   res.json(data)
 })
 
-// GET /api/my-uploads — songs and albums uploaded by current user (or all for admin)
+// GET /api/my-uploads — songs and albums uploaded by current user
 app.get('/api/my-uploads', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
-
-  let songsQuery  = sb.from('songs_meta').select('*').order('created_at', { ascending: false })
-  let albumsQuery = sb.from('albums').select('*, album_songs(count)').order('created_at', { ascending: false })
-
-  if (!user.is_admin) {
-    songsQuery  = songsQuery.eq('uploaded_by', user.id)
-    albumsQuery = albumsQuery.eq('uploaded_by', user.id)
-  }
-
-  const { data: songs }  = await songsQuery
-  const { data: albums } = await albumsQuery
+  const { data: songs }  = await sb.from('songs_meta').select('*').eq('uploaded_by', user.id).order('created_at', { ascending: false })
+  const { data: albums } = await sb.from('albums').select('*, album_songs(count)').eq('uploaded_by', user.id).order('created_at', { ascending: false })
   res.json({
-    songs:    (songs  || []).map(s => ({ id: s.id, title: s.title, artist: s.artist, coverUrl: s.cover_url, createdAt: s.created_at })),
-    albums:   (albums || []).map(a => ({ id: a.id, title: a.title, artist: a.artist, coverUrl: a.cover_url, tracks: a.album_songs?.[0]?.count || 0, createdAt: a.created_at })),
-    isAdmin:  user.is_admin,
+    songs:  (songs  || []).map(s => ({ id: s.id, title: s.title, artist: s.artist, coverUrl: s.cover_url, createdAt: s.created_at })),
+    albums: (albums || []).map(a => ({ id: a.id, title: a.title, artist: a.artist, coverUrl: a.cover_url, tracks: a.album_songs?.[0]?.count || 0, createdAt: a.created_at })),
   })
 })
 

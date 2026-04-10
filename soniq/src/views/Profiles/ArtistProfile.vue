@@ -87,9 +87,7 @@
             <span class="sr-meta">{{ song.album }} · {{ song.year }}</span>
           </div>
           <span class="sr-streams">{{ formatStreams(song.streams) }}</span>
-          <button class="sr-like" :class="{ liked: player.isSongLiked ? player.isSongLiked(song) : false }" @click.stop>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-          </button>
+          <SongMenu :song="song" @feedback="apFeedback = $event; clearApFeedback()" @deleted="onSongDeleted" />
         </div>
       </div>
 
@@ -123,10 +121,16 @@
     </transition>
 
   </div>
+
+  <!-- Feedback toast -->
+  <transition name="toast-fade">
+    <div class="ap-toast" v-if="apFeedback">{{ apFeedback }}</div>
+  </transition>
 </template>
 
 <script setup>
 import AdBanner from '@/components/AdBanner.vue'
+import SongMenu from '@/components/SongMenu.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
@@ -135,6 +139,15 @@ import { usePlayerStore } from '@/stores/player'
 const router = useRouter()
 const route  = useRoute()
 const player = usePlayerStore()
+const apFeedback = ref('')
+let apFeedbackTimer = null
+function clearApFeedback() {
+  clearTimeout(apFeedbackTimer)
+  apFeedbackTimer = setTimeout(() => { apFeedback.value = '' }, 2500)
+}
+function onSongDeleted(id) {
+  player.songs = player.songs.filter(s => s.id !== id)
+}
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
@@ -377,4 +390,7 @@ function playSong(song) {
 @keyframes slideUp   { to { opacity: 1; transform: translateY(0); } }
 @keyframes waveBar   { 0%, 100% { height: 6px; } 50% { height: 12px; } }
 @keyframes barPulse  { 0%, 100% { opacity: 0.4; } 50% { opacity: 0.8; } }
+.ap-toast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%); background: rgba(14,14,24,0.95); border: 1px solid rgba(240,237,230,0.15); border-radius: 6px; padding: 0.6rem 1.2rem; font-size: 0.82rem; color: #f0ede6; z-index: 200; white-space: nowrap; }
+.toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
 </style>

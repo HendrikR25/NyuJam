@@ -334,7 +334,7 @@ const canDeleteSong = computed(() => {
   if (!auth.isLoggedIn || !player.currentSong) return false
   const song = player.currentSong
   if (!String(song.id).startsWith('u_')) return false  // local MP3s can't be deleted
-  const isAdmin  = auth.user?.isAdmin === true
+  const isAdmin  = auth.user?.is_admin === true
   const isArtist = auth.user?.username?.toLowerCase() === song.artist?.toLowerCase()
   return isAdmin || isArtist
 })

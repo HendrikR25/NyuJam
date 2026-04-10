@@ -73,7 +73,8 @@
               <div class="card-title-real">{{ item.name }}</div>
               <div class="card-sub-real" v-if="item.artist">{{ item.artist }}</div>
             </div>
-            <span class="card-play">{{ activeTab === 'songs' ? '▶' : '→' }}</span>
+            <SongMenu v-if="activeTab === 'songs'" :song="item" menu-class="menu-left" @feedback="searchFeedback = $event; clearFeedbackTimer()" @deleted="onSongDeleted" />
+            <span v-else class="card-play">→</span>
           </div>
         </div>
 
@@ -120,11 +121,17 @@
       </div>
     </div>
 
+    <!-- Feedback toast -->
+    <transition name="toast-fade">
+      <div class="search-toast" v-if="searchFeedback">{{ searchFeedback }}</div>
+    </transition>
+
   </div>
 </template>
 
 <script setup>
 import AdBanner from '@/components/AdBanner.vue'
+import SongMenu from '@/components/SongMenu.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import NavBar from '@/components/NavBar.vue'
@@ -139,6 +146,15 @@ const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
 const inputRef      = ref(null)
 const query         = ref('')
+const searchFeedback = ref('')
+let feedbackTimer = null
+function clearFeedbackTimer() {
+  clearTimeout(feedbackTimer)
+  feedbackTimer = setTimeout(() => { searchFeedback.value = '' }, 2500)
+}
+function onSongDeleted(id) {
+  player.songs = player.songs.filter(s => s.id !== id)
+}
 const lastQuery     = ref('')
 const searched      = ref(false)
 const inputFocused  = ref(false)
@@ -561,4 +577,7 @@ kbd {
   .search-title { font-size: 2.4rem; }
   .tab { font-size: 0.76rem; padding: 0.4rem 0.8rem; }
 }
+.search-toast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%); background: rgba(14,14,24,0.95); border: 1px solid rgba(240,237,230,0.15); border-radius: 6px; padding: 0.6rem 1.2rem; font-size: 0.82rem; color: #f0ede6; z-index: 200; white-space: nowrap; }
+.toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
 </style>
