@@ -80,6 +80,7 @@ const open      = ref(false)
 const showPlSub = ref(false)
 const wrapRef   = ref(null)
 const menuStyle = ref({})
+const menuId    = Math.random().toString(36)
 
 const playlists  = computed(() => plStore.playlists)
 const isFavorite = computed(() => player.likedSongs.some(s => String(s.id) === String(props.song?.id)))
@@ -91,19 +92,17 @@ const canManage  = computed(() => {
 
 function toggle() {
   if (!open.value) {
+    // Close all other menus
+    window.dispatchEvent(new CustomEvent('nyujam-menu-open', { detail: menuId }))
     const btn = wrapRef.value?.querySelector('.song-menu-btn')
     if (btn) {
       const rect = btn.getBoundingClientRect()
-      // Position menu below and aligned to right edge of button
-      // Check if menu would go off bottom of screen
-      const menuHeight = 250 // approximate
+      const menuHeight = 250
       const spaceBelow = window.innerHeight - rect.bottom
-      const top = spaceBelow < menuHeight
-        ? rect.top - menuHeight - 4
-        : rect.bottom + 4
+      const top = spaceBelow < menuHeight ? rect.top - menuHeight - 4 : rect.bottom + 4
       menuStyle.value = {
-        top:   `${top}px`,
-        left:  `${rect.right - 200}px`,  // align right edge of menu with button
+        top:  `${top}px`,
+        left: `${rect.right - 200}px`,
       }
     }
   }
@@ -116,13 +115,23 @@ function close() { open.value = false; showPlSub.value = false }
 
 function onClickOutside(e) {
   if (wrapRef.value && wrapRef.value.contains(e.target)) return
-  // Also check if click is inside the teleported menu
   const menu = document.querySelector('.song-menu')
   if (menu && menu.contains(e.target)) return
   close()
 }
-onMounted(() => document.addEventListener('click', onClickOutside))
-onUnmounted(() => document.removeEventListener('click', onClickOutside))
+
+function onOtherMenuOpen(e) {
+  if (e.detail !== menuId) close()
+}
+
+onMounted(() => {
+  document.addEventListener('click', onClickOutside)
+  window.addEventListener('nyujam-menu-open', onOtherMenuOpen)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onClickOutside)
+  window.removeEventListener('nyujam-menu-open', onOtherMenuOpen)
+})
 
 function doFavorite() {
   close()
