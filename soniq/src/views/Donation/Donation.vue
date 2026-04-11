@@ -199,7 +199,6 @@ async function startPayment() {
     paying.value = false
   }
 }
-}
 
 function resetForm() {
   selectedAmount.value = null
