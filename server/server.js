@@ -1040,17 +1040,28 @@ app.post('/api/donations/create-payment-intent', async (req, res) => {
   if (amount > 999) return res.status(400).json({ error: 'Maximalbetrag: 999€' })
 
   try {
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount:   Math.round(amount * 100),  // Stripe erwartet Cents
-      currency: 'eur',
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{
+        price_data: {
+          currency: 'eur',
+          unit_amount: Math.round(amount * 100),
+          product_data: {
+            name: artistName ? `Spende an ${artistName}` : 'Spende an NyuJam',
+            description: message || undefined,
+          },
+        },
+        quantity: 1,
+      }],
+      success_url: `${process.env.FRONTEND_URL || 'https://nyujam.com'}/donation?success=1`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'https://nyujam.com'}/donation`,
       metadata: {
         message:    message?.slice(0, 500) || '',
         artistName: artistName || 'NyuJam',
         type:       artistName ? 'artist' : 'platform',
       },
-      automatic_payment_methods: { enabled: true },
     })
-    res.json({ clientSecret: paymentIntent.client_secret })
+    res.json({ url: session.url })
   } catch (err) {
     console.error('Stripe error:', err.message)
     res.status(500).json({ error: 'Zahlung konnte nicht erstellt werden.' })

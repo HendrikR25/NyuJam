@@ -96,33 +96,13 @@
       </div>
     </transition>
 
-    <!-- ── Stripe Payment Form ── -->
-    <transition name="overlay-fade">
-      <div class="payment-overlay" v-if="showPayment" @click.self="cancelPayment">
-        <div class="payment-card">
-          <button class="pc-close" @click="cancelPayment">✕</button>
-          <h2 class="pc-title">Zahlung</h2>
-          <p class="pc-amount">{{ finalAmount }} € {{ mode === 'artist' ? `an ${selectedArtist?.name}` : 'an NyuJam' }}</p>
-
-          <div id="payment-element" class="stripe-element"></div>
-
-          <div class="error-msg" v-if="stripeError">⚠ {{ stripeError }}</div>
-
-          <button class="confirm-btn" @click="confirmPayment" :disabled="confirmingPayment">
-            <span v-if="confirmingPayment"><span class="spinner"></span> Zahlung läuft...</span>
-            <span v-else>Jetzt zahlen</span>
-          </button>
-        </div>
-      </div>
-    </transition>
-
-    <!-- ── Success ── -->
+    <!-- ── Success (nach Redirect zurück) ── -->
     <transition name="overlay-fade">
       <div class="payment-overlay" v-if="showSuccess">
         <div class="success-card">
           <div class="sc-icon">✓</div>
           <h2 class="sc-title">Danke!</h2>
-          <p class="sc-text">Deine Spende von <strong>{{ lastAmount }} €</strong> ist angekommen. Du bist großartig! 🎵</p>
+          <p class="sc-text">Deine Spende ist angekommen. Du bist großartig! 🎵</p>
           <button class="sc-close" @click="showSuccess = false; resetForm()">Schließen</button>
         </div>
       </div>
@@ -135,11 +115,8 @@
 import { ref, computed, onMounted } from 'vue'
 import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore } from '@/stores/player'
-import { loadStripe } from '@stripe/stripe-js'
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY
-
 const player = usePlayerStore()
 
 // ── State ──────────────────────────────────────────────
@@ -154,21 +131,17 @@ const artistResults  = ref([])
 const selectedArtist = ref(null)
 const errorMsg       = ref('')
 const paying         = ref(false)
-const showPayment    = ref(false)
-const stripeError    = ref('')
-const confirmingPayment = ref(false)
 const showSuccess    = ref(false)
-const lastAmount     = ref(0)
 
 const platformAmounts = [1, 3, 5, 10, 20, 50]
 
-let stripeInstance = null
-let stripeElements = null
-let paymentElement = null
-
-onMounted(async () => {
+onMounted(() => {
   if (!player.songs.length) player.loadSongs()
-  if (STRIPE_KEY) stripeInstance = await loadStripe(STRIPE_KEY)
+  // Detect return from Stripe success
+  if (window.location.search.includes('success=1')) {
+    showSuccess.value = true
+    window.history.replaceState({}, '', '/donation')
+  }
 })
 
 const finalAmount = computed(() => {
@@ -207,7 +180,6 @@ async function startPayment() {
   if (!canDonate.value) return
   errorMsg.value = ''
   paying.value   = true
-
   try {
     const res = await fetch(`${BASE_URL}/api/donations/create-payment-intent`, {
       method:  'POST',
@@ -220,49 +192,13 @@ async function startPayment() {
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
-
-    // Mount Stripe Elements
-    showPayment.value  = true
-    stripeError.value  = ''
-
-    await new Promise(r => setTimeout(r, 100)) // wait for DOM
-
-    stripeElements = stripeInstance.elements({ clientSecret: data.clientSecret, appearance: { theme: 'night', variables: { colorPrimary: '#f0c832', colorBackground: '#0e0e18', colorText: '#f0ede6', borderRadius: '4px' } } })
-    paymentElement = stripeElements.create('payment')
-    paymentElement.mount('#payment-element')
+    window.location.href = data.url
   } catch (e) {
     errorMsg.value = e.message
   } finally {
     paying.value = false
   }
 }
-
-async function confirmPayment() {
-  if (!stripeInstance || !stripeElements) return
-  confirmingPayment.value = true
-  stripeError.value = ''
-
-  const { error } = await stripeInstance.confirmPayment({
-    elements: stripeElements,
-    confirmParams: { return_url: window.location.href },
-    redirect: 'if_required',
-  })
-
-  if (error) {
-    stripeError.value = error.message
-    confirmingPayment.value = false
-  } else {
-    lastAmount.value  = finalAmount.value
-    showPayment.value = false
-    showSuccess.value = true
-    confirmingPayment.value = false
-  }
-}
-
-function cancelPayment() {
-  showPayment.value = false
-  stripeError.value = ''
-  if (paymentElement) { paymentElement.destroy(); paymentElement = null }
 }
 
 function resetForm() {
