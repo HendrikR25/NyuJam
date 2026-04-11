@@ -89,7 +89,7 @@ const navItems = [
   { id: 'upload',       icon: '↑',  label: 'Upload' },
   { id: 'about',        icon: '◉',  label: 'About' },
   { id: 'subscription', icon: '★',  label: 'Abos' },
-  { id: 'support',      icon: '💬', label: 'Support' },
+  { id: 'support',      icon: '⌘', label: 'Support' },
 ]
 
 // ── Playlist Wheel — echte Daten vom Server ──
