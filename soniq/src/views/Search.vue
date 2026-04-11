@@ -73,7 +73,7 @@
               <div class="card-title-real">{{ item.name }}</div>
               <div class="card-sub-real" v-if="item.artist">{{ item.artist }}</div>
             </div>
-            <SongMenu v-if="activeTab === 'songs'" :song="item" menu-class="menu-left" @feedback="searchFeedback = $event; clearFeedbackTimer()" @deleted="onSongDeleted" />
+            <SongMenu v-if="activeTab === 'songs'" :song="item" @feedback="searchFeedback = $event; clearFeedbackTimer()" @deleted="onSongDeleted" />
             <span v-else class="card-play">→</span>
           </div>
         </div>

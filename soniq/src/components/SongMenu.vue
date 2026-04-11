@@ -7,7 +7,7 @@
     </button>
 
     <transition name="menu-pop">
-      <div class="song-menu" v-if="open" :class="menuClass">
+      <div class="song-menu" v-if="open" :style="menuStyle">
 
         <!-- Zu Lieblingssongs -->
         <button class="sm-item" @click="doFavorite">
@@ -65,8 +65,7 @@ import { usePlayerStore }    from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'
 
 const props = defineProps({
-  song:      { type: Object, required: true },
-  menuClass: { type: String, default: '' },
+  song: { type: Object, required: true },
 })
 const emit = defineEmits(['feedback', 'deleted', 'edit'])
 
@@ -78,6 +77,7 @@ const plStore  = usePlaylistsStore()
 const open      = ref(false)
 const showPlSub = ref(false)
 const wrapRef   = ref(null)
+const menuStyle = ref({})
 
 const playlists  = computed(() => plStore.playlists)
 const isFavorite = computed(() => player.likedSongs.some(s => String(s.id) === String(props.song?.id)))
@@ -88,6 +88,17 @@ const canManage  = computed(() => {
 })
 
 function toggle() {
+  if (!open.value) {
+    // Calculate position before opening
+    const btn = wrapRef.value?.querySelector('.song-menu-btn')
+    if (btn) {
+      const rect = btn.getBoundingClientRect()
+      menuStyle.value = {
+        top:   `${rect.bottom + 4}px`,
+        right: `${window.innerWidth - rect.right}px`,
+      }
+    }
+  }
   open.value = !open.value
   if (!open.value) showPlSub.value = false
   if (open.value && !plStore.playlists.length) plStore.load()
@@ -138,7 +149,7 @@ async function doDelete() {
 </script>
 
 <style scoped>
-.song-menu-wrap { position: relative; flex-shrink: 0; }
+.song-menu-wrap { position: relative; flex-shrink: 0; z-index: 50; }
 
 .song-menu-btn {
   background: none; border: none; cursor: pointer;
@@ -149,10 +160,10 @@ async function doDelete() {
 .song-menu-btn:hover { color: #f0ede6; background: rgba(240,237,230,0.08); }
 
 .song-menu {
-  position: absolute; right: 0; top: calc(100% + 4px);
+  position: fixed;
   background: #0e0e1a; border: 1px solid rgba(240,237,230,0.12);
   border-radius: 8px; padding: 0.35rem; min-width: 200px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.7); z-index: 1000;
 }
 
 .sm-item {
