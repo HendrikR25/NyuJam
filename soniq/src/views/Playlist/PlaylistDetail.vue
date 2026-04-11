@@ -105,7 +105,7 @@ const playlist = ref(null)
 
 onMounted(async () => {
   try {
-    // Load favorites
+    if (!player.songs.length) await player.loadSongs()
     if (player.loadFavorites) await player.loadFavorites()
 
     if (playlistId === 'favorites') {
@@ -145,7 +145,15 @@ onMounted(async () => {
 // For playlists: use playlist.value.songs
 const songs = computed(() => {
   if (playlistId === 'favorites') return player.likedSongs
-  return playlist.value?.songs ?? []
+  const raw = playlist.value?.songs ?? []
+  // playlist_songs has song_id — match against player.songs for full data
+  return raw.map(ps => {
+    const songId = ps.song_id || ps.id
+    const full = player.songs.find(s =>
+      String(s.id) === `u_${songId}` || String(s.id) === String(songId)
+    )
+    return full || { id: ps.song_id, name: ps.song_name, artist: ps.song_artist, cover: null, url: null }
+  }).filter(s => s.name)
 })
 
 const totalDuration = computed(() => {
