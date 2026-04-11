@@ -892,6 +892,129 @@ app.get('/api/streams/artist/:name/songs', async (req, res) => {
   res.json(counts)
 })
 
+// ── Subscriptions ─────────────────────────────────────
+const PLANS = {
+  basic:   { name: 'Basic',   price: 300, priceId: process.env.STRIPE_PRICE_BASIC   },
+  premium: { name: 'Premium', price: 599, priceId: process.env.STRIPE_PRICE_PREMIUM },
+}
+
+app.get('/api/subscription', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data } = await sb.from('subscriptions').select('*').eq('user_id', user.id).single()
+  res.json(data || null)
+})
+
+app.post('/api/subscription/create', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { plan } = req.body
+  if (!PLANS[plan]) return res.status(400).json({ error: 'Ungültiger Plan' })
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [{ price: PLANS[plan].priceId, quantity: 1 }],
+      success_url: `${process.env.FRONTEND_URL || 'https://nyujam.com'}/subscription-success?plan=${plan}`,
+      cancel_url:  `${process.env.FRONTEND_URL || 'https://nyujam.com'}/subscription`,
+      metadata: { user_id: user.id, plan },
+    })
+    res.json({ url: session.url })
+  } catch (e) {
+    console.error('Stripe subscription error:', e.message)
+    res.status(500).json({ error: e.message })
+  }
+})
+
+app.post('/api/subscription/cancel', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: sub } = await sb.from('subscriptions').select('*').eq('user_id', user.id).single()
+  if (!sub) return res.status(404).json({ error: 'Kein Abo gefunden' })
+  if (sub.stripe_sub_id) {
+    await stripe.subscriptions.cancel(sub.stripe_sub_id).catch(() => {})
+  }
+  await sb.from('subscriptions').update({ status: 'cancelled', ends_at: new Date().toISOString() }).eq('user_id', user.id)
+  res.json({ ok: true })
+})
+
+// Stripe webhook for subscription events
+app.post('/api/subscription/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig    = req.headers['stripe-signature']
+  const secret = process.env.STRIPE_WEBHOOK_SUB_SECRET
+  let event
+  try {
+    event = secret ? stripe.webhooks.constructEvent(req.body, sig, secret) : JSON.parse(req.body)
+  } catch { return res.status(400).send('Webhook Error') }
+
+  if (event.type === 'checkout.session.completed') {
+    const session = event.data.object
+    const { user_id, plan } = session.metadata || {}
+    if (user_id && plan) {
+      await sb.from('subscriptions').upsert({
+        user_id, plan, status: 'active',
+        stripe_sub_id: session.subscription,
+        started_at: new Date().toISOString(),
+      }, { onConflict: 'user_id' })
+    }
+  }
+  if (event.type === 'customer.subscription.deleted') {
+    const stripeSub = event.data.object
+    await sb.from('subscriptions').update({ status: 'cancelled' }).eq('stripe_sub_id', stripeSub.id)
+  }
+  res.json({ received: true })
+})
+
+// ── Support Chat ───────────────────────────────────────
+app.get('/api/support/ticket', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: ticket } = await sb.from('support_tickets').select('*').eq('user_id', user.id).single()
+  if (!ticket) return res.json(null)
+  const { data: messages } = await sb.from('support_messages').select('*, users(username, avatar)').eq('ticket_id', ticket.id).order('created_at', { ascending: true })
+  res.json({ ...ticket, messages: messages || [] })
+})
+
+// Support user can see all tickets
+app.get('/api/support/tickets', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  const { data: tickets } = await sb.from('support_tickets').select('*, users(username), support_messages(count)').eq('status', 'open').order('created_at', { ascending: false })
+  res.json(tickets || [])
+})
+
+app.post('/api/support/ticket', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  // Get or create ticket
+  let { data: ticket } = await sb.from('support_tickets').select('*').eq('user_id', user.id).single()
+  if (!ticket) {
+    const { data: newTicket } = await sb.from('support_tickets').insert({ user_id: user.id }).select().single()
+    ticket = newTicket
+  }
+  const { text } = req.body
+  if (!text?.trim()) return res.status(400).json({ error: 'Nachricht fehlt' })
+  const { data: msg } = await sb.from('support_messages').insert({ ticket_id: ticket.id, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
+  res.status(201).json(msg)
+})
+
+app.post('/api/support/ticket/:ticketId/reply', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  const { text } = req.body
+  if (!text?.trim()) return res.status(400).json({ error: 'Nachricht fehlt' })
+  const { data: msg } = await sb.from('support_messages').insert({ ticket_id: req.params.ticketId, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
+  res.status(201).json(msg)
+})
+
+app.patch('/api/support/ticket/resolve', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('support_tickets').update({ status: 'resolved' }).eq('user_id', user.id)
+  res.json({ ok: true })
+})
+
 // ── Donations (Stripe) ────────────────────────────────
 app.post('/api/donations/create-payment-intent', async (req, res) => {
   const { amount, message, artistName } = req.body

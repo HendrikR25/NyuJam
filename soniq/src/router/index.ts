@@ -96,6 +96,8 @@ const router = createRouter({
     { path: '/reset-password', component: () => import('@/views/ResetPassword.vue') },
     { path: '/about',          component: () => import('@/views/About.vue') },
     { path: '/comments', component: () => import('@/views/Comments.vue') },
+    { path: '/subscription', component: () => import('@/views/Subscription.vue') },
+    { path: '/support',      component: () => import('@/views/SupportView.vue') },
   ]
 })
 
