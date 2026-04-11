@@ -129,8 +129,9 @@ function authHeader() {
 onMounted(async () => {
   if (!auth.isLoggedIn) return
   try {
-    const res = await fetch(`${BASE_URL}/api/subscription`, { headers: authHeader() })
-    currentSub.value = await res.json()
+    const res  = await fetch(`${BASE_URL}/api/subscription`, { headers: authHeader() })
+    const data = await res.json()
+    currentSub.value = (data && data.plan) ? data : null
   } catch {}
 })
 
