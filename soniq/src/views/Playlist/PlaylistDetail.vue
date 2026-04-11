@@ -12,7 +12,7 @@
     </div>
 
     <!-- Back -->
-    <button class="back-btn" @click="router.push('/playlists')">← Playlists</button>
+    <NavBar back-to="/playlists" back-label="Playlists" />
 
     <!-- Loading -->
     <div class="loading-state" v-if="loading">
@@ -85,9 +85,11 @@
 </template>
 
 <script setup>
+const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePlaylistsStore } from '@/stores/playlists'
+import NavBar from '@/components/NavBar.vue'
 import { usePlayerStore }    from '@/stores/player'
 
 const router  = useRouter()
@@ -120,7 +122,7 @@ onMounted(async () => {
     }
 
     // Load from server directly — don't rely on store cache
-    const res = await fetch(`http://localhost:3001/api/playlists/${playlistId}`)
+    const res = await fetch(`${BASE_URL}/api/playlists/${playlistId}`)
     if (res.ok) {
       playlist.value = await res.json()
     } else {
@@ -166,7 +168,7 @@ function playSong(song) {
 
 async function removeSong(song) {
   if (playlistId === 'favorites') {
-    await fetch(`http://localhost:3001/api/favorites/${song.id}`, { method: 'DELETE' })
+    await fetch(`${BASE_URL}/api/favorites/${song.id}`, { method: 'DELETE' })
     // mutate the reactive ref directly
     player.likedSongs.splice(0, player.likedSongs.length, ...player.likedSongs.filter(f => String(f.id) !== String(song.id)))
   } else {
