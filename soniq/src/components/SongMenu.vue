@@ -29,6 +29,11 @@
                 <span class="sm-sub-icon" :style="{ background: pl.color + '33' }">{{ pl.icon }}</span>
                 <span>{{ pl.name }}</span>
               </button>
+              <div class="sm-sub-divider"></div>
+              <button class="sm-sub-item sm-sub-item--new" @click="doCreatePlaylist">
+                <span class="sm-sub-icon" style="background:rgba(91,106,255,0.2)">+</span>
+                <span>Neue Playlist</span>
+              </button>
             </div>
           </transition>
 
@@ -76,11 +81,13 @@ const auth     = useAuthStore()
 const player   = usePlayerStore()
 const plStore  = usePlaylistsStore()
 
-const open      = ref(false)
-const showPlSub = ref(false)
-const wrapRef   = ref(null)
-const menuStyle = ref({})
-const menuId    = Math.random().toString(36)
+const open        = ref(false)
+const showPlSub   = ref(false)
+const showNewPl   = ref(false)
+const newPlName   = ref('')
+const wrapRef     = ref(null)
+const menuStyle   = ref({})
+const menuId      = Math.random().toString(36)
 
 const playlists  = computed(() => plStore.playlists)
 const isFavorite = computed(() => player.likedSongs.some(s => String(s.id) === String(props.song?.id)))
@@ -144,6 +151,19 @@ function doAddToPlaylist(pl) {
   plStore.addSong(pl.id, props.song)
     .then(() => emit('feedback', `✓ Zu „${pl.name}" hinzugefügt`))
     .catch(() => emit('feedback', 'Bereits in dieser Playlist'))
+}
+
+async function doCreatePlaylist() {
+  const name = prompt('Name der neuen Playlist:')
+  if (!name?.trim()) return
+  close()
+  try {
+    const pl = await plStore.create({ name: name.trim() })
+    if (pl) {
+      await plStore.addSong(pl.id, props.song)
+      emit('feedback', `✓ Playlist „${name.trim()}" erstellt`)
+    }
+  } catch { emit('feedback', '⚠ Fehler beim Erstellen') }
 }
 
 function doGoToArtist() {
@@ -215,6 +235,9 @@ async function doDelete() {
 }
 .sm-sub-item:hover { background: rgba(240,237,230,0.06); color: #f0ede6; }
 .sm-sub-icon { width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; flex-shrink: 0; }
+.sm-sub-divider { height: 1px; background: rgba(240,237,230,0.07); margin: 0.2rem 0; }
+.sm-sub-item--new { color: rgba(91,106,255,0.8) !important; }
+.sm-sub-item--new:hover { color: #5b6aff !important; background: rgba(91,106,255,0.08) !important; }
 .sub-expand-enter-active, .sub-expand-leave-active { transition: opacity 0.2s, max-height 0.2s; max-height: 300px; overflow: hidden; }
 .sub-expand-enter-from, .sub-expand-leave-to { opacity: 0; max-height: 0; }
 </style>

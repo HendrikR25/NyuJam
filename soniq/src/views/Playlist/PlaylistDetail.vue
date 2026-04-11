@@ -67,6 +67,7 @@
             <span class="song-artist">{{ song.artist }}</span>
           </div>
           <SongMenu :song="song" @feedback="plFeedback = $event; clearPlFeedback()" @deleted="removeSong(song)" @click.stop />
+          <button class="song-remove" @click.stop="removeSong(song)" title="Aus Playlist entfernen">✕</button>
         </div>
       </div>
 
