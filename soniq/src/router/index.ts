@@ -97,7 +97,7 @@ const router = createRouter({
     { path: '/about',          component: () => import('@/views/About.vue') },
     { path: '/comments', component: () => import('@/views/Comments.vue') },
     { path: '/subscription', component: () => import('@/views/Subscription.vue') },
-    { path: '/support',      component: () => import('@/views/SupportView.vue') },
+    { path: '/support',      component: () => import('@/views/Support.vue') },
   ]
 })
 
