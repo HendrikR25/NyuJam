@@ -191,9 +191,9 @@ function playSong(song) {
 }
 
 async function removeSong(song) {
+  if (!confirm(`„${song.name}" aus der Playlist entfernen?`)) return
   if (playlistId === 'favorites') {
     await fetch(`${BASE_URL}/api/favorites/${song.id}`, { method: 'DELETE' })
-    // mutate the reactive ref directly
     player.likedSongs.splice(0, player.likedSongs.length, ...player.likedSongs.filter(f => String(f.id) !== String(song.id)))
   } else {
     await plStore.removeSong(playlistId, String(song.id))
