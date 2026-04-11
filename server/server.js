@@ -914,7 +914,6 @@ app.post('/api/subscription/create', async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
-      payment_method_types: ['card', 'paypal'],
       line_items: [{ price: PLANS[plan].priceId, quantity: 1 }],
       success_url: `${process.env.FRONTEND_URL || 'https://nyujam.com'}/subscription-success?plan=${plan}`,
       cancel_url:  `${process.env.FRONTEND_URL || 'https://nyujam.com'}/subscription`,
