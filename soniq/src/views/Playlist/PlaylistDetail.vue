@@ -58,11 +58,15 @@
             <span v-if="currentlyPlaying !== song.id" class="num-text">{{ idx + 1 }}</span>
             <span v-else class="num-wave"><span></span><span></span><span></span></span>
           </div>
+          <div class="song-cover">
+            <img v-if="song.cover" :src="song.cover" class="song-cover-img" />
+            <span v-else class="song-cover-icon">♩</span>
+          </div>
           <div class="song-info">
             <span class="song-name" :class="{ 'song-name--playing': currentlyPlaying === song.id }">{{ song.name }}</span>
             <span class="song-artist">{{ song.artist }}</span>
           </div>
-          <button class="song-remove" @click.stop="removeSong(song)" title="Entfernen">✕</button>
+          <SongMenu :song="song" @feedback="plFeedback = $event; clearPlFeedback()" @deleted="removeSong(song)" @click.stop />
         </div>
       </div>
 
@@ -82,6 +86,10 @@
     </div>
 
   </div>
+
+  <transition name="toast-fade">
+    <div class="pl-toast" v-if="plFeedback">{{ plFeedback }}</div>
+  </transition>
 </template>
 
 <script setup>
@@ -89,8 +97,9 @@ const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { usePlaylistsStore } from '@/stores/playlists'
-import NavBar from '@/components/NavBar.vue'
-import { usePlayerStore }    from '@/stores/player'
+import NavBar    from '@/components/NavBar.vue'
+import SongMenu  from '@/components/SongMenu.vue'
+import { usePlayerStore } from '@/stores/player'
 
 const router  = useRouter()
 const route   = useRoute()
@@ -163,6 +172,12 @@ const totalDuration = computed(() => {
 
 // ── Actions ────────────────────────────────────────────
 const currentlyPlaying = ref(null)
+const plFeedback = ref('')
+let plFeedbackTimer = null
+function clearPlFeedback() {
+  clearTimeout(plFeedbackTimer)
+  plFeedbackTimer = setTimeout(() => { plFeedback.value = '' }, 2500)
+}
 
 function playSong(song) {
   const fullSong = player.songs.find(s => String(s.id) === String(song.id))
@@ -348,6 +363,11 @@ async function removeSong(song) {
 .num-wave span:nth-child(3) { height: 8px;  animation-delay: 0.3s; }
 
 .song-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.song-cover { width: 38px; height: 38px; border-radius: 4px; background: rgba(240,237,230,0.06); flex-shrink: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 0.9rem; color: rgba(240,237,230,0.3); }
+.song-cover-img { width: 100%; height: 100%; object-fit: cover; }
+.pl-toast { position: fixed; bottom: 5rem; left: 50%; transform: translateX(-50%); background: rgba(14,14,24,0.95); border: 1px solid rgba(240,237,230,0.15); border-radius: 6px; padding: 0.6rem 1.2rem; font-size: 0.82rem; color: #f0ede6; z-index: 200; white-space: nowrap; font-family: 'DM Sans', sans-serif; }
+.toast-fade-enter-active, .toast-fade-leave-active { transition: opacity 0.3s, transform 0.3s; }
+.toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
 .song-name {
   font-size: 0.9rem; font-weight: 500; color: #f0ede6;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
