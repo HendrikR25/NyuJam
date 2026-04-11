@@ -980,8 +980,13 @@ app.get('/api/support/ticket', async (req, res) => {
 app.get('/api/support/tickets', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
-  const { data: tickets } = await sb.from('support_tickets').select('*, users(username), support_messages(count)').eq('status', 'open').order('created_at', { ascending: false })
-  res.json(tickets || [])
+  const { data: tickets } = await sb.from('support_tickets').select('*, users(username), support_messages(count)').eq('status', 'open').order('created_at', { ascending: true })
+  // Add last message preview
+  const result = await Promise.all((tickets || []).map(async t => {
+    const { data: last } = await sb.from('support_messages').select('text').eq('ticket_id', t.id).order('created_at', { ascending: false }).limit(1).single()
+    return { ...t, lastMessage: last?.text || '' }
+  }))
+  res.json(result)
 })
 
 app.post('/api/support/ticket', async (req, res) => {
@@ -1006,6 +1011,20 @@ app.post('/api/support/ticket/:ticketId/reply', async (req, res) => {
   if (!text?.trim()) return res.status(400).json({ error: 'Nachricht fehlt' })
   const { data: msg } = await sb.from('support_messages').insert({ ticket_id: req.params.ticketId, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
   res.status(201).json(msg)
+})
+
+app.get('/api/support/ticket/:ticketId/messages', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  const { data } = await sb.from('support_messages').select('*, users(username, avatar)').eq('ticket_id', req.params.ticketId).order('created_at', { ascending: true })
+  res.json(data || [])
+})
+
+app.patch('/api/support/ticket/:ticketId/resolve', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  await sb.from('support_tickets').update({ status: 'resolved' }).eq('id', req.params.ticketId)
+  res.json({ ok: true })
 })
 
 app.patch('/api/support/ticket/resolve', async (req, res) => {
