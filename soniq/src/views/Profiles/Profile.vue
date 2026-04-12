@@ -224,15 +224,34 @@
         </button>
       </div>
 
+      <!-- Stripe Connect — Künstler-Spenden -->
+      <div class="profile-form" style="margin-top:0.5rem">
+        <div class="section-title">💸 Spenden von Fans empfangen</div>
+        <p class="connect-desc">Verknüpfe dein Stripe-Konto, damit Fans dir direkt Geld schicken können. 100% des Betrags landet bei dir — NyuJam behält nichts.</p>
+        <div class="connect-status" :class="connectEnabled ? 'connect-status--on' : 'connect-status--off'">
+          <span class="cs-dot"></span>
+          {{ connectEnabled ? '✓ Zahlungen aktiviert' : 'Noch nicht aktiviert' }}
+          <span v-if="connectEnabled" class="cs-id">{{ connectAccountId?.slice(0, 16) }}…</span>
+        </div>
+        <div class="form-success" v-if="connectSuccess">{{ connectSuccess }}</div>
+        <div class="form-error"   v-if="connectError">⚠ {{ connectError }}</div>
+        <div class="connect-btns">
+          <button v-if="!connectEnabled" class="submit-btn connect-btn" @click="startConnect" :disabled="connectLoading">
+            {{ connectLoading ? 'Wird verbunden...' : 'Mit Stripe verbinden →' }}
+          </button>
+          <button v-else class="submit-btn connect-btn--disconnect" @click="disconnectConnect" :disabled="connectLoading">
+            {{ connectLoading ? '...' : 'Verbindung trennen' }}
+          </button>
+        </div>
+        <p class="connect-hint">Du wirst zu Stripe weitergeleitet, um ein kostenloses Zahlungskonto zu erstellen oder ein bestehendes zu verknüpfen.</p>
+      </div>
+
       <!-- Logout -->
       <button class="logout-btn" @click="auth.logout()">Abmelden</button>
 
       <!-- ── My Uploads ── -->
       <div class="uploads-section" v-if="myUploads.songs.length || myUploads.albums.length">
-        <h2 class="uploads-title">
-          {{ myUploads.isAdmin ? 'Alle Uploads' : 'Meine Uploads' }}
-          <span class="admin-badge" v-if="myUploads.isAdmin">⚡ Admin</span>
-        </h2>
+        <h2 class="uploads-title">Meine Uploads</h2>
 
         <!-- Songs -->
         <div class="uploads-group" v-if="myUploads.songs.length">
@@ -302,7 +321,7 @@
 
 <script setup>
 import AdBanner from '@/components/AdBanner.vue'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
@@ -553,8 +572,57 @@ async function changePassword() {
   } catch { pwError.value = 'Verbindungsfehler.' }
   finally { changingPw.value = false }
 }
+
+// ── Stripe Connect ─────────────────────────────────────
+const connectEnabled   = ref(false)
+const connectAccountId = ref(null)
+const connectLoading   = ref(false)
+const connectSuccess   = ref('')
+const connectError     = ref('')
+
+async function loadConnectStatus() {
+  if (!auth.isLoggedIn) return
+  try {
+    const res = await fetch(`${BASE_URL}/api/donations/connect/status`, { headers: authHeader() })
+    if (res.ok) {
+      const data = await res.json()
+      connectEnabled.value   = data.connected
+      connectAccountId.value = data.accountId
+    }
+  } catch {}
+}
+
+async function startConnect() {
+  connectLoading.value = true; connectError.value = ''
+  try {
+    const res  = await fetch(`${BASE_URL}/api/donations/connect/url`, { headers: authHeader() })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    window.location.href = data.url
+  } catch (e) {
+    connectError.value = e.message || 'Verbindung fehlgeschlagen.'
+    connectLoading.value = false
+  }
+}
+
+async function disconnectConnect() {
+  if (!confirm('Stripe-Verbindung wirklich trennen? Fans können dir dann keine Spenden mehr schicken.')) return
+  connectLoading.value = true; connectError.value = ''
+  try {
+    const res = await fetch(`${BASE_URL}/api/donations/connect/disconnect`, {
+      method: 'DELETE', headers: authHeader()
+    })
+    if (res.ok) {
+      connectEnabled.value   = false
+      connectAccountId.value = null
+      connectSuccess.value   = '✓ Verbindung getrennt.'
+      setTimeout(() => { connectSuccess.value = '' }, 3000)
+    }
+  } catch { connectError.value = 'Fehler beim Trennen.' }
+  finally { connectLoading.value = false }
+}
 const BASE_URL      = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-const myUploads     = ref({ songs: [], albums: [], isAdmin: false })
+const myUploads     = ref({ songs: [], albums: [] })
 const editingId     = ref(null)
 const editingTitle  = ref('')
 const editingType   = ref(null)
@@ -568,7 +636,42 @@ function authHeader() {
 }
 
 watch(() => auth.isLoggedIn, async (loggedIn) => {
-  if (loggedIn) await loadMyUploads()
+  if (loggedIn) {
+    await loadMyUploads()
+    await loadConnectStatus()
+  }
+
+onMounted(async () => {
+  // Handle Stripe Connect OAuth callback
+  const params = new URLSearchParams(window.location.search)
+  const code  = params.get('code')
+  const state = params.get('state')
+  if (code && state) {
+    connectLoading.value = true
+    try {
+      const res = await fetch(`${BASE_URL}/api/donations/connect/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        body: JSON.stringify({ code, state }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        connectSuccess.value = '✓ Stripe erfolgreich verbunden! Fans können dir jetzt Spenden schicken.'
+        await loadConnectStatus()
+      } else {
+        connectError.value = data.error || 'Verbindung fehlgeschlagen.'
+      }
+    } catch { connectError.value = 'Verbindungsfehler.' }
+    finally {
+      connectLoading.value = false
+      window.history.replaceState({}, '', '/profile')
+    }
+  }
+  if (auth.isLoggedIn) {
+    await loadMyUploads()
+    await loadConnectStatus()
+  }
+})
 }, { immediate: true })
 
 async function loadMyUploads() {
@@ -744,10 +847,23 @@ function showFeedback(msg) {
 .logout-btn { position: relative; z-index: 1; margin-top: 1rem; background: none; border: 1px solid rgba(255,90,50,0.2); border-radius: 3px; color: rgba(255,90,50,0.5); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.08em; padding: 0.5rem 1.5rem; cursor: pointer; transition: all 0.2s; }
 .logout-btn:hover { color: #ff5a32; border-color: rgba(255,90,50,0.4); background: rgba(255,90,50,0.06); }
 
+/* Stripe Connect */
+.connect-desc { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.65; margin-bottom: 0.75rem; }
+.connect-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 0.75rem; }
+.connect-status--on  { background: rgba(50,200,160,0.08); border: 1px solid rgba(50,200,160,0.2); color: #32c8a0; }
+.connect-status--off { background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.08); color: rgba(240,237,230,0.3); }
+.cs-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.cs-id { font-size: 0.65rem; opacity: 0.5; margin-left: auto; font-family: monospace; }
+.connect-btns { display: flex; gap: 0.5rem; }
+.connect-btn { background: #32c8a0 !important; color: #0a0a0f !important; border-color: transparent !important; }
+.connect-btn:hover:not(:disabled) { background: #28b08c !important; }
+.connect-btn--disconnect { background: none !important; border: 1px solid rgba(255,90,50,0.25) !important; color: rgba(255,90,50,0.5) !important; font-size: 0.75rem !important; }
+.connect-btn--disconnect:hover { color: #ff5a32 !important; border-color: rgba(255,90,50,0.4) !important; }
+.connect-hint { font-size: 0.68rem; color: rgba(240,237,230,0.2); margin-top: 0.5rem; line-height: 1.5; }
+
 /* ── My Uploads ── */
 .uploads-section { position: relative; z-index: 1; width: 100%; max-width: 460px; margin-top: 2rem; display: flex; flex-direction: column; gap: 1rem; }
-.uploads-title { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; letter-spacing: 0.15em; color: #f0ede6; display: flex; align-items: center; gap: 0.6rem; }
-.admin-badge { font-family: 'DM Sans', sans-serif; font-size: 0.65rem; letter-spacing: 0.1em; background: rgba(240,200,50,0.12); border: 1px solid rgba(240,200,50,0.3); color: #f0c832; border-radius: 3px; padding: 0.15rem 0.5rem; font-weight: 600; }
+.uploads-title { font-family: 'Bebas Neue', cursive; font-size: 1.3rem; letter-spacing: 0.15em; color: #f0ede6; }
 .uploads-group { display: flex; flex-direction: column; gap: 0.4rem; }
 .uploads-group-label { font-size: 0.65rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); margin-bottom: 0.2rem; }
 .upload-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 4px; transition: border-color 0.2s; }

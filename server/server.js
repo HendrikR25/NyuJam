@@ -748,6 +748,41 @@ app.delete('/api/search/history', async (req, res) => {
 
 // ── Albums ─────────────────────────────────────────────
 // GET /api/albums/artist/:name — all albums for an artist with their songs
+// GET /api/artists/search — search users who have uploaded songs (for donations)
+app.get('/api/artists/search', async (req, res) => {
+  const q = (req.query.q || '').trim().toLowerCase()
+  if (!q) return res.json([])
+  const { data } = await sb.from('songs_meta')
+    .select('artist, uploaded_by')
+    .ilike('artist', `%${q}%`)
+    .limit(20)
+  if (!data?.length) return res.json([])
+
+  // Deduplicate by uploaded_by, get connect status
+  const seen = new Set()
+  const userIds = []
+  for (const s of data) {
+    if (s.uploaded_by && !seen.has(s.uploaded_by)) {
+      seen.add(s.uploaded_by)
+      userIds.push({ id: s.uploaded_by, name: s.artist })
+    }
+  }
+  // Fetch connect status for each user
+  const { data: users } = await sb.from('users')
+    .select('id, username, stripe_connect_enabled')
+    .in('id', userIds.map(u => u.id))
+
+  const result = userIds.slice(0, 5).map(u => {
+    const user = users?.find(usr => usr.id === u.id)
+    return {
+      id:                     u.id,
+      name:                   u.name,
+      stripe_connect_enabled: user?.stripe_connect_enabled || false,
+    }
+  })
+  res.json(result)
+})
+
 app.get('/api/albums/artist/:name', async (req, res) => {
   const artist = decodeURIComponent(req.params.name)
   const { data: albums } = await sb.from('albums').select('*, album_songs(track_nr, songs_meta(*))').ilike('artist', artist).order('released_at', { ascending: false })
@@ -1034,12 +1069,58 @@ app.patch('/api/support/ticket/resolve', async (req, res) => {
 })
 
 // ── Donations (Stripe) ────────────────────────────────
+
+// POST /api/donations/create-payment-intent
+// If artistId is given → pay directly to artist's Stripe Connect account
+// If no artistId → pay to NyuJam platform account
 app.post('/api/donations/create-payment-intent', async (req, res) => {
-  const { amount, message, artistName } = req.body
-  if (!amount || amount < 1) return res.status(400).json({ error: 'Ungültiger Betrag' })
-  if (amount > 999) return res.status(400).json({ error: 'Maximalbetrag: 999€' })
+  const { amount, message, artistId } = req.body
+  if (!amount || amount < 1)   return res.status(400).json({ error: 'Ungültiger Betrag' })
+  if (amount > 999)             return res.status(400).json({ error: 'Maximalbetrag: 999€' })
+
+  const FRONTEND = process.env.FRONTEND_URL || 'https://nyujam.com'
 
   try {
+    // Artist donation via Stripe Connect
+    if (artistId) {
+      const { data: artist } = await sb.from('users')
+        .select('username, stripe_connect_id, stripe_connect_enabled')
+        .eq('id', artistId).single()
+
+      if (!artist?.stripe_connect_id || !artist?.stripe_connect_enabled) {
+        return res.status(400).json({ error: 'Dieser Künstler hat noch keine Zahlungen aktiviert.' })
+      }
+
+      // Direct charge to artist's connected account — 100% goes to artist
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_intent_data: {
+          transfer_data: { destination: artist.stripe_connect_id },
+        },
+        line_items: [{
+          price_data: {
+            currency: 'eur',
+            unit_amount: Math.round(amount * 100),
+            product_data: {
+              name:        `Spende an ${artist.username}`,
+              description: message || undefined,
+            },
+          },
+          quantity: 1,
+        }],
+        success_url: `${FRONTEND}/donation?success=1&artist=${encodeURIComponent(artist.username)}`,
+        cancel_url:  `${FRONTEND}/donation`,
+        metadata: {
+          type:       'artist',
+          artistId:   artistId,
+          artistName: artist.username,
+          message:    message?.slice(0, 500) || '',
+        },
+      })
+      return res.json({ url: session.url })
+    }
+
+    // Platform donation — goes to NyuJam's own Stripe account
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{
@@ -1047,25 +1128,89 @@ app.post('/api/donations/create-payment-intent', async (req, res) => {
           currency: 'eur',
           unit_amount: Math.round(amount * 100),
           product_data: {
-            name: artistName ? `Spende an ${artistName}` : 'Spende an NyuJam',
+            name:        'Spende an NyuJam',
             description: message || undefined,
           },
         },
         quantity: 1,
       }],
-      success_url: `${process.env.FRONTEND_URL || 'https://nyujam.com'}/donation?success=1`,
-      cancel_url:  `${process.env.FRONTEND_URL || 'https://nyujam.com'}/donation`,
+      success_url: `${FRONTEND}/donation?success=1`,
+      cancel_url:  `${FRONTEND}/donation`,
       metadata: {
-        message:    message?.slice(0, 500) || '',
-        artistName: artistName || 'NyuJam',
-        type:       artistName ? 'artist' : 'platform',
+        type:    'platform',
+        message: message?.slice(0, 500) || '',
       },
     })
     res.json({ url: session.url })
   } catch (err) {
-    console.error('Stripe error:', err.message)
+    console.error('Stripe donation error:', err.message)
     res.status(500).json({ error: 'Zahlung konnte nicht erstellt werden.' })
   }
+})
+
+// GET /api/donations/connect/url — generate Stripe Connect OAuth URL for artist
+app.get('/api/donations/connect/url', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  const state = Buffer.from(JSON.stringify({ userId: user.id })).toString('base64')
+  const params = new URLSearchParams({
+    response_type: 'code',
+    client_id:     process.env.STRIPE_CONNECT_CLIENT_ID,
+    scope:         'read_write',
+    redirect_uri:  `${process.env.FRONTEND_URL || 'https://nyujam.com'}/stripe-connect-callback`,
+    state,
+  })
+  res.json({ url: `https://connect.stripe.com/oauth/authorize?${params}` })
+})
+
+// POST /api/donations/connect/callback — exchange OAuth code for account ID
+app.post('/api/donations/connect/callback', async (req, res) => {
+  const { code, state } = req.body
+  if (!code) return res.status(400).json({ error: 'Code fehlt' })
+
+  try {
+    const { userId } = JSON.parse(Buffer.from(state, 'base64').toString())
+    const user = await getUserFromToken(req)
+    if (!user || user.id !== userId) return res.status(401).json({ error: 'Ungültige Session' })
+
+    const response = await stripe.oauth.token({ grant_type: 'authorization_code', code })
+    const accountId = response.stripe_user_id
+
+    await sb.from('users').update({
+      stripe_connect_id:      accountId,
+      stripe_connect_enabled: true,
+    }).eq('id', user.id)
+
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('Connect callback error:', err.message)
+    res.status(500).json({ error: 'Stripe-Verbindung fehlgeschlagen.' })
+  }
+})
+
+// DELETE /api/donations/connect/disconnect — remove Stripe Connect from account
+app.delete('/api/donations/connect/disconnect', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  await sb.from('users').update({
+    stripe_connect_id:      null,
+    stripe_connect_enabled: false,
+  }).eq('id', user.id)
+  res.json({ ok: true })
+})
+
+// GET /api/donations/connect/status — check if current user has Connect set up
+app.get('/api/donations/connect/status', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data } = await sb.from('users')
+    .select('stripe_connect_id, stripe_connect_enabled')
+    .eq('id', user.id).single()
+  res.json({
+    connected: !!(data?.stripe_connect_id && data?.stripe_connect_enabled),
+    accountId: data?.stripe_connect_id || null,
+  })
 })
 
 // Stripe Webhook — bestätigt erfolgreiche Zahlung
@@ -1075,9 +1220,9 @@ app.post('/api/donations/webhook', express.raw({ type: 'application/json' }), (r
   if (!secret) return res.json({ received: true })
   try {
     const event = stripe.webhooks.constructEvent(req.body, sig, secret)
-    if (event.type === 'payment_intent.succeeded') {
-      const pi = event.data.object
-      console.log(`✅ Donation: ${pi.amount / 100}€ für ${pi.metadata.artistName}`)
+    if (event.type === 'checkout.session.completed') {
+      const s = event.data.object
+      console.log(`✅ Donation: ${s.amount_total / 100}€ Typ: ${s.metadata?.type} an ${s.metadata?.artistName || 'NyuJam'}`)
     }
     res.json({ received: true })
   } catch (err) {

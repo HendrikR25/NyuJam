@@ -72,27 +72,36 @@
             <div class="sa-avatar">{{ selectedArtist.name[0] }}</div>
             <div class="sa-info">
               <span class="sa-name">{{ selectedArtist.name }}</span>
-              <span class="sa-sub">Künstler auf NyuJam</span>
+              <span class="sa-sub" :class="{ 'sa-sub--warn': !selectedArtist.stripe_connect_enabled }">
+                {{ selectedArtist.stripe_connect_enabled ? '✓ Zahlungen aktiviert' : '⚠ Zahlungen noch nicht aktiviert' }}
+              </span>
             </div>
             <button class="sa-change" @click="selectedArtist = null; artistQuery = ''">Ändern</button>
           </div>
         </transition>
 
-        <div class="amount-grid" v-if="selectedArtist">
-          <button v-for="a in platformAmounts" :key="a" class="amount-btn" :class="{ active: selectedAmount === a && !customActive }" @click="selectAmount(a)">{{ a }} €</button>
-          <button class="amount-btn amount-btn--custom" :class="{ active: customActive }" @click="customActive = true; selectedAmount = null">Eigener Betrag</button>
+        <!-- Warning if artist has no Connect -->
+        <div class="connect-warning" v-if="selectedArtist && !selectedArtist.stripe_connect_enabled">
+          Dieser Künstler hat noch kein Zahlungskonto verknüpft. Bitte wähle einen anderen Künstler oder bitte ihn, Zahlungen in seinem Profil zu aktivieren.
         </div>
 
-        <input v-if="customActive && selectedArtist" v-model="customAmount" class="custom-input" type="number" min="1" max="999" placeholder="Betrag in €" />
+        <template v-if="selectedArtist && selectedArtist.stripe_connect_enabled">
+          <div class="amount-grid">
+            <button v-for="a in platformAmounts" :key="a" class="amount-btn" :class="{ active: selectedAmount === a && !customActive }" @click="selectAmount(a)">{{ a }} €</button>
+            <button class="amount-btn amount-btn--custom" :class="{ active: customActive }" @click="customActive = true; selectedAmount = null">Eigener Betrag</button>
+          </div>
 
-        <textarea v-if="selectedArtist" v-model="message" class="message-input" placeholder="Nachricht an den Künstler..." rows="3"></textarea>
+          <input v-if="customActive" v-model="customAmount" class="custom-input" type="number" min="1" max="999" placeholder="Betrag in €" />
 
-        <div class="error-msg" v-if="errorMsg">⚠ {{ errorMsg }}</div>
+          <textarea v-model="message" class="message-input" placeholder="Nachricht an den Künstler..." rows="3"></textarea>
 
-        <button class="donate-btn donate-btn--artist" v-if="selectedArtist" @click="startPayment" :disabled="!canDonate || paying">
-          <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
-          <span v-else>{{ canDonate ? `${finalAmount} € an ${selectedArtist.name} spenden` : 'Betrag wählen' }}</span>
-        </button>
+          <div class="error-msg" v-if="errorMsg">⚠ {{ errorMsg }}</div>
+
+          <button class="donate-btn donate-btn--artist" @click="startPayment" :disabled="!canDonate || paying">
+            <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
+            <span v-else>{{ canDonate ? `${finalAmount} € an ${selectedArtist.name} spenden` : 'Betrag wählen' }}</span>
+          </button>
+        </template>
       </div>
     </transition>
 
@@ -137,7 +146,6 @@ const platformAmounts = [1, 3, 5, 10, 20, 50]
 
 onMounted(() => {
   if (!player.songs.length) player.loadSongs()
-  // Detect return from Stripe success
   if (window.location.search.includes('success=1')) {
     showSuccess.value = true
     window.history.replaceState({}, '', '/donation')
@@ -158,15 +166,22 @@ function selectAmount(a) {
 }
 
 // ── Artist search ──────────────────────────────────────
-function searchArtists() {
+async function searchArtists() {
   const q = artistQuery.value.trim().toLowerCase()
   if (!q) { artistResults.value = []; return }
-  const seen = new Set()
-  artistResults.value = player.songs
-    .filter(s => s.artist.toLowerCase().includes(q))
-    .filter(s => { if (seen.has(s.artist)) return false; seen.add(s.artist); return true })
-    .slice(0, 5)
-    .map(s => ({ id: s.id, name: s.artist }))
+  // Search users who have uploaded songs
+  try {
+    const res = await fetch(`${BASE_URL}/api/artists/search?q=${encodeURIComponent(q)}`)
+    artistResults.value = res.ok ? await res.json() : []
+  } catch {
+    // Fallback: search from player songs
+    const seen = new Set()
+    artistResults.value = player.songs
+      .filter(s => s.artist.toLowerCase().includes(q))
+      .filter(s => { if (seen.has(s.artist)) return false; seen.add(s.artist); return true })
+      .slice(0, 5)
+      .map(s => ({ id: s.uploadedBy || s.id, name: s.artist, stripe_connect_enabled: false }))
+  }
 }
 
 function pickArtist(a) {
@@ -181,14 +196,13 @@ async function startPayment() {
   errorMsg.value = ''
   paying.value   = true
   try {
-    const res = await fetch(`${BASE_URL}/api/donations/create-payment-intent`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount:     finalAmount.value,
-        message:    message.value,
-        artistName: selectedArtist.value?.name || null,
-      }),
+    const body = mode.value === 'artist'
+      ? { amount: finalAmount.value, message: message.value, artistId: selectedArtist.value.id }
+      : { amount: finalAmount.value, message: message.value }
+
+    const res  = await fetch(`${BASE_URL}/api/donations/create-payment-intent`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
@@ -276,8 +290,11 @@ function resetForm() {
 .sa-info { flex: 1; display: flex; flex-direction: column; gap: 0.15rem; }
 .sa-name { font-family: 'Bebas Neue', cursive; font-size: 1.1rem; letter-spacing: 0.08em; }
 .sa-sub { font-size: 0.65rem; color: rgba(240,237,230,0.3); }
+.sa-sub--warn { color: rgba(255,200,50,0.7) !important; }
 .sa-change { background: none; border: 1px solid rgba(240,237,230,0.15); border-radius: 3px; color: rgba(240,237,230,0.4); font-size: 0.7rem; padding: 0.25rem 0.6rem; cursor: pointer; transition: all 0.2s; }
 .sa-change:hover { color: #f0ede6; border-color: rgba(240,237,230,0.3); }
+
+.connect-warning { background: rgba(255,200,50,0.06); border: 1px solid rgba(255,200,50,0.2); border-radius: 4px; padding: 0.65rem 0.9rem; font-size: 0.75rem; color: rgba(255,200,50,0.8); line-height: 1.6; }
 
 .error-msg { background: rgba(255,90,50,0.1); border: 1px solid rgba(255,90,50,0.3); border-radius: 3px; padding: 0.55rem 1rem; font-size: 0.78rem; color: #ff8060; }
 
