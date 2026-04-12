@@ -83,6 +83,17 @@
       </div>
     </div>
 
+    <!-- Footer -->
+    <div class="footer">
+      <span>© {{ new Date().getFullYear() }} NyuJam</span>
+      <span class="footer-dot">·</span>
+      <button class="footer-link" @click="router.push('/impressum')">Impressum</button>
+      <span class="footer-dot">·</span>
+      <button class="footer-link" @click="router.push('/datenschutz')">Datenschutz</button>
+      <span class="footer-dot">·</span>
+      <a class="footer-link" href="mailto:hendrik@nyujam.com">Kontakt</a>
+    </div>
+
   </div>
 </template>
 
@@ -137,4 +148,9 @@ const router = useRouter()
 
 @keyframes fadeDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeUp { to { opacity: 1; transform: translateY(0); } }
+
+.footer { position: relative; z-index: 1; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; justify-content: center; margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(240,237,230,0.07); width: 100%; max-width: 520px; font-size: 0.72rem; color: rgba(240,237,230,0.2); }
+.footer-dot { opacity: 0.3; }
+.footer-link { background: none; border: none; color: rgba(240,237,230,0.3); font-size: 0.72rem; cursor: pointer; text-decoration: none; font-family: 'DM Sans', sans-serif; transition: color 0.2s; padding: 0; }
+.footer-link:hover { color: rgba(240,237,230,0.6); }
 </style>

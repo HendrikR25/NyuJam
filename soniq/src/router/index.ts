@@ -98,6 +98,7 @@ const router = createRouter({
     { path: '/comments', component: () => import('@/views/Comments.vue') },
     { path: '/subscription', component: () => import('@/views/Subscription.vue') },
     { path: '/support',      component: () => import('@/views/Support.vue') },
+    { path: '/impressum', component: () => import('@/views/Impressum.vue') },
   ]
 })
 
