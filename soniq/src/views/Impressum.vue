@@ -10,7 +10,7 @@
         <h2 class="section-title">Angaben gemäß § 5 TMG</h2>
         <p>[Hendrik Rennau]</p>
         <p>[Schulenburgstraße 22]</p>
-        <p>[18069] Rostock]</p>
+        <p>[18069 Rostock]</p>
         <p>[Deutschland]</p>
       </section>
 

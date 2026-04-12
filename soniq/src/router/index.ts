@@ -99,6 +99,7 @@ const router = createRouter({
     { path: '/subscription', component: () => import('@/views/Subscription.vue') },
     { path: '/support',      component: () => import('@/views/Support.vue') },
     { path: '/impressum', component: () => import('@/views/Impressum.vue') },
+    { path: '/datenschutz', component: () => import('@/views/Datenschutz.vue') },
   ]
 })
 
