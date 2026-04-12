@@ -8,8 +8,8 @@
     <!-- Header -->
     <div class="page-header">
       <span class="header-icon">€</span>
-      <h1 class="page-title">SPENDE</h1>
-      <p class="page-sub">Unterstütze Musik — direkt & transparent</p>
+      <h1 class="page-title">SUPPORT</h1>
+      <p class="page-sub">Unterstütze Musik direkt — 100% beim Künstler</p>
     </div>
 
     <!-- Mode Tabs -->
@@ -27,7 +27,7 @@
       <div class="donation-panel" key="platform" v-if="mode === 'platform'">
         <div class="panel-intro">
           <div class="pi-logo">◈ NyuJam</div>
-          <p class="pi-text">Deine Spende hilft uns, NyuJam weiterzuentwickeln, Server zu betreiben und Musik für alle zugänglich zu halten.</p>
+          <p class="pi-text">Dein Support hilft uns, NyuJam weiterzuentwickeln, Server zu betreiben und Musik für alle zugänglich zu halten.</p>
         </div>
 
         <div class="amount-grid">
@@ -43,14 +43,14 @@
 
         <button class="donate-btn" @click="startPayment" :disabled="!canDonate || paying">
           <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
-          <span v-else>{{ canDonate ? `${finalAmount} € spenden` : 'Betrag wählen' }}</span>
+          <span v-else>{{ canDonate ? `${finalAmount} € senden` : 'Betrag wählen' }}</span>
         </button>
       </div>
 
       <!-- ── Artist Donation ── -->
       <div class="donation-panel" key="artist" v-else>
         <div class="panel-intro">
-          <p class="pi-text">Unterstütze deinen Lieblingskünstler direkt. 100% des Betrags gehen ohne Abzüge an den Künstler.</p>
+          <p class="pi-text">Schick deinem Lieblingskünstler ein Tip — 100% landet direkt bei ihm, ohne Abzüge.</p>
         </div>
 
         <div class="artist-search-wrap" :class="{ focused: artistFocused }">
@@ -99,7 +99,7 @@
 
           <button class="donate-btn donate-btn--artist" @click="startPayment" :disabled="!canDonate || paying">
             <span v-if="paying"><span class="spinner"></span> Wird verarbeitet...</span>
-            <span v-else>{{ canDonate ? `${finalAmount} € an ${selectedArtist.name} spenden` : 'Betrag wählen' }}</span>
+            <span v-else>{{ canDonate ? `${finalAmount} € Tip an ${selectedArtist.name}` : 'Betrag wählen' }}</span>
           </button>
         </template>
       </div>
@@ -111,7 +111,7 @@
         <div class="success-card">
           <div class="sc-icon">✓</div>
           <h2 class="sc-title">Danke!</h2>
-          <p class="sc-text">Deine Spende ist angekommen. Du bist großartig! 🎵</p>
+          <p class="sc-text">Dein Support ist angekommen. Du bist großartig! 🎵</p>
           <button class="sc-close" @click="showSuccess = false; resetForm()">Schließen</button>
         </div>
       </div>
