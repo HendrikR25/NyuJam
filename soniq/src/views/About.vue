@@ -37,7 +37,7 @@
         <div class="fc-icon">📻</div>
         <div class="fc-body">
           <h2 class="fc-title">Länder-Radio & Freunde-Radio</h2>
-          <p class="fc-text">Entdecke Musik aus aller Welt im Länder-Radio — synchronisiert für alle Hörer des gleichen Landes. Oder erstelle mit Freunden eine gemeinsame Radio-Session und hört zusammen, egal wo ihr seid.</p>
+          <p class="fc-text">Entdecke Musik aus aller Welt im Radio — synchronisiert für alle Hörer des gleichen Radios. Oder erstelle mit Freunden eine gemeinsame Radio-Session und hört zusammen, egal wo ihr seid.</p>
           <div class="fc-tags">
             <span class="fc-tag">🌍 Live & synchron</span>
             <span class="fc-tag">👥 Freunde einladen</span>
