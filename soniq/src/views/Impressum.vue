@@ -8,22 +8,15 @@
 
       <section class="section">
         <h2 class="section-title">Angaben gemäß § 5 TMG</h2>
-        <p>[VORNAME NACHNAME]</p>
-        <p>[STRASSE HAUSNUMMER]</p>
-        <p>[PLZ ORT]</p>
-        <p>[LAND]</p>
+        <p>[Hendrik Rennau]</p>
+        <p>[Schulenburgstraße 22]</p>
+        <p>[18069] Rostock]</p>
+        <p>[Deutschland]</p>
       </section>
 
       <section class="section">
         <h2 class="section-title">Kontakt</h2>
         <p>E-Mail: <a href="mailto:hendrik@nyujam.com">hendrik@nyujam.com</a></p>
-      </section>
-
-      <section class="section">
-        <h2 class="section-title">Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV</h2>
-        <p>[VORNAME NACHNAME]</p>
-        <p>[STRASSE HAUSNUMMER]</p>
-        <p>[PLZ ORT]</p>
       </section>
 
       <section class="section">
