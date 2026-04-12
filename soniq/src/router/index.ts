@@ -100,6 +100,7 @@ const router = createRouter({
     { path: '/support',      component: () => import('@/views/Support.vue') },
     { path: '/impressum', component: () => import('@/views/Impressum.vue') },
     { path: '/datenschutz', component: () => import('@/views/Datenschutz.vue') },
+    { path: '/agb', component: () => import('@/views/AGB.vue') },
   ]
 })
 

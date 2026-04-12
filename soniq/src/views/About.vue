@@ -98,6 +98,8 @@
       <span class="footer-dot">·</span>
       <button class="footer-link" @click="router.push('/datenschutz')">Datenschutz</button>
       <span class="footer-dot">·</span>
+      <button class="footer-link" @click="router.push('/agb')">AGB</button>
+      <span class="footer-dot">·</span>
       <a class="footer-link" href="mailto:dmca@nyujam.com">DMCA</a>
       <span class="footer-dot">·</span>
       <a class="footer-link" href="mailto:hendrik@nyujam.com">Kontakt</a>
