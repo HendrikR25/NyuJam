@@ -83,6 +83,13 @@
       </div>
     </div>
 
+    <!-- DMCA -->
+    <div class="dmca-section">
+      <h3 class="dmca-title">Copyright / DMCA</h3>
+      <p class="dmca-text">NyuJam respektiert geistiges Eigentum. Nutzer dürfen ausschließlich Musik hochladen, an der sie die nötigen Rechte besitzen. Wenn du der Meinung bist, dass Inhalte auf NyuJam deine Urheberrechte verletzen, wende dich bitte an uns — wir werden gemeldete Inhalte schnellstmöglich prüfen und bei berechtigten Verstößen entfernen.</p>
+      <a class="dmca-link" href="mailto:dmca@nyujam.com">dmca@nyujam.com</a>
+    </div>
+
     <!-- Footer -->
     <div class="footer">
       <span>© {{ new Date().getFullYear() }} NyuJam</span>
@@ -90,6 +97,8 @@
       <button class="footer-link" @click="router.push('/impressum')">Impressum</button>
       <span class="footer-dot">·</span>
       <button class="footer-link" @click="router.push('/datenschutz')">Datenschutz</button>
+      <span class="footer-dot">·</span>
+      <a class="footer-link" href="mailto:dmca@nyujam.com">DMCA</a>
       <span class="footer-dot">·</span>
       <a class="footer-link" href="mailto:hendrik@nyujam.com">Kontakt</a>
     </div>
@@ -153,4 +162,10 @@ const router = useRouter()
 .footer-dot { opacity: 0.3; }
 .footer-link { background: none; border: none; color: rgba(240,237,230,0.3); font-size: 0.72rem; cursor: pointer; text-decoration: none; font-family: 'DM Sans', sans-serif; transition: color 0.2s; padding: 0; }
 .footer-link:hover { color: rgba(240,237,230,0.6); }
+
+.dmca-section { position: relative; z-index: 1; width: 100%; max-width: 520px; background: rgba(240,237,230,0.02); border: 1px solid rgba(240,237,230,0.07); border-radius: 8px; padding: 1.25rem 1.5rem; margin-top: 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.dmca-title { font-family: 'Bebas Neue', cursive; font-size: 0.95rem; letter-spacing: 0.15em; color: rgba(240,237,230,0.4); }
+.dmca-text { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.7; }
+.dmca-link { font-size: 0.78rem; color: #5b6aff; text-decoration: none; align-self: flex-start; }
+.dmca-link:hover { text-decoration: underline; }
 </style>
