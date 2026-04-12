@@ -1375,17 +1375,222 @@ app.get('/api/radio/country/:code/rankings/weekly', async (req, res) => {
   res.json(data || [])
 })
 
+// ── Continent Radio ────────────────────────────────────
+const CONTINENTS = ['europe','namerica','samerica','asia','africa','oceania']
+
+function getUtcWeekday() {
+  return new Date().toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' })
+}
+function getUtcWeekStart() {
+  const now = new Date()
+  const day = now.toLocaleDateString('en', { weekday: 'short', timeZone: 'UTC' })
+  const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+  const idx = days.indexOf(day)
+  const monday = new Date(now)
+  monday.setUTCDate(now.getUTCDate() - (idx === 0 ? 6 : idx - 1))
+  return monday.toISOString().split('T')[0]
+}
+function isUtcWeekend() {
+  const day = getUtcWeekday()
+  return day === 'Sat' || day === 'Sun'
+}
+
+async function getContinentState(continent) {
+  const { data } = await sb.from('radio_continent_state').select('*').eq('continent', continent).single()
+  if (data) return data
+  const { data: newState } = await sb.from('radio_continent_state').insert({
+    continent, current_song: null, song_started_at: null, played_this_cycle: []
+  }).select().single()
+  return newState
+}
+
+async function advanceContinentSong(continent) {
+  const state = await getContinentState(continent)
+  const weekend = isUtcWeekend()
+  const weekStart = getUtcWeekStart()
+  let nextSong = null
+
+  if (weekend) {
+    // Weekend: play Top 50 of continent week
+    const { data: top50 } = await sb.from('radio_rankings_continent')
+      .select('*').eq('continent', continent).eq('week_start', weekStart)
+      .order('like_pct', { ascending: false }).limit(50)
+    if (top50?.length) {
+      const pick = top50[Math.floor(Math.random() * top50.length)]
+      const { data: s } = await sb.from('songs_meta').select('*').eq('id', pick.song_id).single()
+      if (s) nextSong = { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }
+    }
+  } else {
+    // Weekday: cycle through this week's continent pool (Top 10 from each country)
+    // Get pool from radio_rankings_continent for current week
+    const { data: pool } = await sb.from('radio_rankings_continent')
+      .select('*').eq('continent', continent).eq('week_start', weekStart)
+      .order('like_pct', { ascending: false })
+    if (pool?.length) {
+      const played = state.played_this_cycle || []
+      const remaining = pool.filter(s => !played.includes(s.song_id))
+      const pickFrom = remaining.length ? remaining : pool // restart cycle
+      // Shuffle and pick first
+      const shuffled = pickFrom.sort(() => Math.random() - 0.5)
+      const pick = shuffled[0]
+      const { data: s } = await sb.from('songs_meta').select('*').eq('id', pick.song_id).single()
+      if (s) {
+        nextSong = { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }
+        const newPlayed = remaining.length ? [...played, pick.song_id] : [pick.song_id]
+        await sb.from('radio_continent_state').update({ played_this_cycle: newPlayed }).eq('continent', continent)
+      }
+    }
+  }
+
+  if (!nextSong) return null
+  const now = new Date().toISOString()
+  await sb.from('radio_continent_state').update({ current_song: nextSong, song_started_at: now }).eq('continent', continent)
+  return nextSong
+}
+
+app.get('/api/radio/continent/:code', async (req, res) => {
+  const continent = req.params.code.toLowerCase()
+  if (!CONTINENTS.includes(continent)) return res.status(400).json({ error: 'Unbekannter Kontinent' })
+  const weekend = isUtcWeekend()
+  const weekStart = getUtcWeekStart()
+
+  // Get current state
+  const state = await getContinentState(continent)
+  let current = state?.current_song || null
+
+  // Check if song is still playing (assume avg song 3.5 min)
+  if (current && state.song_started_at) {
+    const elapsed = (Date.now() - new Date(state.song_started_at).getTime()) / 1000
+    if (elapsed > 210) current = await advanceContinentSong(continent)
+  } else {
+    current = await advanceContinentSong(continent)
+  }
+
+  // Get top 50 for display
+  const { data: top50 } = await sb.from('radio_rankings_continent')
+    .select('*').eq('continent', continent).eq('week_start', weekStart)
+    .order('like_pct', { ascending: false }).limit(50)
+
+  res.json({
+    continent, current, weekend, weekStart,
+    top50: top50 || [],
+    startedAt: state?.song_started_at,
+  })
+})
+
+app.post('/api/radio/continent/:code/next', async (req, res) => {
+  const continent = req.params.code.toLowerCase()
+  const song = await advanceContinentSong(continent)
+  res.json({ song })
+})
+
+app.get('/api/radio/continent/:code/rankings', async (req, res) => {
+  const continent = req.params.code.toLowerCase()
+  const { data } = await sb.from('radio_rankings_continent').select('*')
+    .eq('continent', continent).order('week_start', { ascending: false }).order('like_pct', { ascending: false })
+  // Group by week
+  const weeks = {}
+  for (const r of data || []) {
+    if (!weeks[r.week_start]) weeks[r.week_start] = []
+    weeks[r.week_start].push(r)
+  }
+  res.json(weeks)
+})
+
+// ── Global Radio ───────────────────────────────────────
+async function getGlobalState() {
+  const { data } = await sb.from('radio_global_state').select('*').eq('id', 'global').single()
+  if (data) return data
+  const { data: newState } = await sb.from('radio_global_state').insert({
+    id: 'global', current_song: null, song_started_at: null, played_this_cycle: []
+  }).select().single()
+  return newState
+}
+
+async function advanceGlobalSong() {
+  const state = await getGlobalState()
+  const weekend = isUtcWeekend()
+  const weekStart = getUtcWeekStart()
+  let nextSong = null
+
+  const { data: pool } = await sb.from('radio_rankings_global')
+    .select('*').eq('week_start', weekStart)
+    .order('like_pct', { ascending: false }).limit(weekend ? 50 : 100)
+
+  if (pool?.length) {
+    const played = state.played_this_cycle || []
+    const remaining = pool.filter(s => !played.includes(s.song_id))
+    const pickFrom = remaining.length ? remaining : pool
+    const shuffled = pickFrom.sort(() => Math.random() - 0.5)
+    const pick = shuffled[0]
+    const { data: s } = await sb.from('songs_meta').select('*').eq('id', pick.song_id).single()
+    if (s) {
+      nextSong = { id: `u_${s.id}`, name: s.title, artist: s.artist, cover: s.cover_url, url: s.mp3_url }
+      const newPlayed = remaining.length ? [...played, pick.song_id] : [pick.song_id]
+      await sb.from('radio_global_state').update({ played_this_cycle: newPlayed }).eq('id', 'global')
+    }
+  }
+
+  if (!nextSong) return null
+  const now = new Date().toISOString()
+  await sb.from('radio_global_state').update({ current_song: nextSong, song_started_at: now }).eq('id', 'global')
+  return nextSong
+}
+
+app.get('/api/radio/global', async (req, res) => {
+  const weekend = isUtcWeekend()
+  const weekStart = getUtcWeekStart()
+  const state = await getGlobalState()
+  let current = state?.current_song || null
+
+  if (current && state.song_started_at) {
+    const elapsed = (Date.now() - new Date(state.song_started_at).getTime()) / 1000
+    if (elapsed > 210) current = await advanceGlobalSong()
+  } else {
+    current = await advanceGlobalSong()
+  }
+
+  const { data: top50 } = await sb.from('radio_rankings_global')
+    .select('*').eq('week_start', weekStart)
+    .order('like_pct', { ascending: false }).limit(50)
+
+  res.json({ current, weekend, weekStart, top50: top50 || [], startedAt: state?.song_started_at })
+})
+
+app.post('/api/radio/global/next', async (req, res) => {
+  const song = await advanceGlobalSong()
+  res.json({ song })
+})
+
+app.get('/api/radio/global/rankings', async (req, res) => {
+  const { data } = await sb.from('radio_rankings_global').select('*')
+    .order('week_start', { ascending: false }).order('like_pct', { ascending: false })
+  const weeks = {}
+  for (const r of data || []) {
+    if (!weeks[r.week_start]) weeks[r.week_start] = []
+    weeks[r.week_start].push(r)
+  }
+  res.json(weeks)
+})
+
 // ── Cron: Save rankings at 22:00 local time (check every minute) ──
 cron.schedule('* * * * *', async () => {
-  // Get all countries that are at 22:00
+  const min = new Date().getMinutes()
+  const utcH = new Date().getUTCHours()
+
+  // Country rankings — check every country at their 22:00
   const countries = Object.keys(COUNTRY_TIMEZONES)
   for (const country of countries) {
-    const h    = getCountryHour(country)
-    const date = getCountryDate(country)
-    const min  = new Date().getMinutes()
+    const h = getCountryHour(country)
     if (h === 22 && min === 0) {
-      await saveCountryRanking(country, date)
+      await saveCountryRanking(country, getCountryDate(country))
     }
+  }
+
+  // Continent & Global rankings — every Monday UTC 00:00 compute from last week's country data
+  if (utcH === 0 && min === 0 && getUtcWeekday() === 'Mon') {
+    await buildContinentRankings()
+    await buildGlobalRankings()
   }
 })
 
@@ -1440,6 +1645,85 @@ async function saveCountryRanking(country, date) {
   }
 
   console.log(`✅ Rankings saved for ${country} on ${date}`)
+}
+
+// Build continent rankings from last week's country Top 10s
+async function buildContinentRankings() {
+  const weekStart = getUtcWeekStart()
+  // Get the previous week start (this runs Monday, so previous week = last Mon)
+  const prevWeekDate = new Date(weekStart)
+  prevWeekDate.setUTCDate(prevWeekDate.getUTCDate() - 7)
+  const prevWeekStart = prevWeekDate.toISOString().split('T')[0]
+
+  for (const continent of CONTINENTS) {
+    // Get all countries in this continent
+    const countries = Object.entries(countryToContinent)
+      .filter(([, c]) => c === continent).map(([k]) => k)
+
+    // Get Top 10 per country from last week
+    const allSongs = {}
+    for (const country of countries) {
+      const { data: top10 } = await sb.from('radio_rankings_weekly')
+        .select('*').eq('country', country).eq('week_start', prevWeekStart)
+        .order('like_pct', { ascending: false }).limit(10)
+      for (const s of top10 || []) {
+        if (!allSongs[s.song_id]) {
+          allSongs[s.song_id] = { ...s, total_listeners: 0, total_likes: 0 }
+        }
+        allSongs[s.song_id].total_listeners += s.listeners
+        allSongs[s.song_id].total_likes     += s.likes
+      }
+    }
+
+    // Save all to continent rankings
+    for (const s of Object.values(allSongs)) {
+      const like_pct = s.total_listeners > 0 ? Math.round((s.total_likes / s.total_listeners) * 10000) / 100 : 0
+      await sb.from('radio_rankings_continent').upsert({
+        song_id: s.song_id, song_name: s.song_name, artist: s.artist, cover_url: s.cover_url,
+        continent, week_start: weekStart, like_pct,
+        listeners: s.total_listeners, likes: s.total_likes,
+      }, { onConflict: 'song_id,continent,week_start' })
+    }
+
+    // Reset continent cycle for new week
+    await sb.from('radio_continent_state').update({ played_this_cycle: [], current_song: null, song_started_at: null }).eq('continent', continent)
+    console.log(`✅ Continent rankings built for ${continent} week ${weekStart}`)
+  }
+}
+
+// Build global rankings from last week's continent Top 10s
+async function buildGlobalRankings() {
+  const weekStart = getUtcWeekStart()
+  const prevWeekDate = new Date(weekStart)
+  prevWeekDate.setUTCDate(prevWeekDate.getUTCDate() - 7)
+  const prevWeekStart = prevWeekDate.toISOString().split('T')[0]
+
+  const allSongs = {}
+  for (const continent of CONTINENTS) {
+    const { data: top10 } = await sb.from('radio_rankings_continent')
+      .select('*').eq('continent', continent).eq('week_start', prevWeekStart)
+      .order('like_pct', { ascending: false }).limit(10)
+    for (const s of top10 || []) {
+      if (!allSongs[s.song_id]) {
+        allSongs[s.song_id] = { ...s, total_listeners: 0, total_likes: 0 }
+      }
+      allSongs[s.song_id].total_listeners += s.listeners
+      allSongs[s.song_id].total_likes     += s.likes
+    }
+  }
+
+  for (const s of Object.values(allSongs)) {
+    const like_pct = s.total_listeners > 0 ? Math.round((s.total_likes / s.total_listeners) * 10000) / 100 : 0
+    await sb.from('radio_rankings_global').upsert({
+      song_id: s.song_id, song_name: s.song_name, artist: s.artist, cover_url: s.cover_url,
+      week_start: weekStart, like_pct,
+      listeners: s.total_listeners, likes: s.total_likes,
+    }, { onConflict: 'song_id,week_start' })
+  }
+
+  // Reset global cycle
+  await sb.from('radio_global_state').update({ played_this_cycle: [], current_song: null, song_started_at: null }).eq('id', 'global')
+  console.log(`✅ Global rankings built for week ${weekStart}`)
 }
 
 // ── Radio Sessions ─────────────────────────────────────

@@ -41,8 +41,21 @@
       </transition>
     </div>
 
-    <!-- Map -->
-    <div class="map-wrap">
+    <!-- Radio Level Tabs -->
+    <div class="radio-tabs">
+      <button class="radio-tab" :class="{ active: radioLevel === 'country' }" @click="radioLevel = 'country'">
+        🌍 Länder
+      </button>
+      <button class="radio-tab" :class="{ active: radioLevel === 'continent' }" @click="radioLevel = 'continent'; loadContinentRadio()">
+        🌐 Kontinente
+      </button>
+      <button class="radio-tab" :class="{ active: radioLevel === 'global' }" @click="radioLevel = 'global'; loadGlobalRadio()">
+        ✦ Global
+      </button>
+    </div>
+
+    <!-- Map (Country level) -->
+    <div class="map-wrap" v-show="radioLevel === 'country'">
       <div v-if="loading" class="map-loading">
         <span class="loading-dot"></span>
         <span class="loading-dot"></span>
@@ -129,6 +142,111 @@
 
     <!-- Country Radio Player -->
     <transition name="np-swap" mode="out-in">
+      <div v-if="radioLevel === 'continent'" key="continent-level" class="continent-panel">
+        <div class="cont-grid">
+          <button v-for="c in continentList" :key="c.id"
+            class="cont-btn" :class="{ active: activeContinentRadio === c.id }"
+            @click="selectContinent(c.id)">
+            <span class="cont-icon">{{ c.icon }}</span>
+            <span class="cont-name">{{ c.name }}</span>
+          </button>
+        </div>
+        <div class="now-playing-card" v-if="activeContinentRadio" :style="{ '--accent': '#32c8a0' }">
+          <div class="npc-cover" :style="{ background: 'rgba(50,200,160,0.1)', borderColor: 'rgba(50,200,160,0.3)' }">
+            <img v-if="continentRadio.current?.cover" :src="continentRadio.current.cover" class="npc-cover-img" />
+            <span v-else class="npc-icon">📻</span>
+            <span class="npc-wave" v-if="radioAudio"><span></span><span></span><span></span><span></span></span>
+          </div>
+          <div class="npc-info">
+            <span class="npc-station">{{ continentList.find(c=>c.id===activeContinentRadio)?.name }} Radio</span>
+            <span class="npc-song">{{ continentRadio.current?.name || (continentRadio.loading ? 'Lädt...' : 'Noch keine Songs verfügbar') }}</span>
+            <span class="npc-artist">{{ continentRadio.current?.artist || (continentRadio.weekend ? '🏆 Wochenend-Top 50' : 'Wöchentliche Top Songs') }}</span>
+          </div>
+          <div class="npc-controls" v-if="continentRadio.current">
+            <button class="npc-mute" @click="toggleMute">
+              <svg v-if="!isMuted" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            </button>
+          </div>
+          <!-- Rankings -->
+          <div class="rankings-wrap" v-if="continentRadio.top50?.length">
+            <div class="rankings-title">{{ continentRadio.weekend ? '🏆 Wochen-Top 50' : '📊 Aktuelle Songs' }}</div>
+            <div class="rankings-list">
+              <div v-for="(r, i) in continentRadio.top50.slice(0,50)" :key="r.song_id" class="rank-item" @click="playRankSong(r)">
+                <span class="rank-nr">{{ i + 1 }}</span>
+                <div class="rank-cover"><img v-if="r.cover_url" :src="r.cover_url" class="rank-cover-img" /><span v-else>♩</span></div>
+                <div class="rank-info"><span class="rank-name">{{ r.song_name }}</span><span class="rank-artist">{{ r.artist }}</span></div>
+                <span class="rank-pct">{{ r.like_pct }}%</span>
+              </div>
+            </div>
+          </div>
+          <!-- Historical rankings -->
+          <div class="hist-wrap" v-if="Object.keys(continentRadio.history || {}).length">
+            <div class="hist-title">📅 Vergangene Wochen</div>
+            <div v-for="(songs, week) in continentRadio.history" :key="week" class="hist-week">
+              <button class="hist-week-btn" @click="toggleHistWeek('cont', week)">
+                KW {{ weekLabel(week) }} <span>{{ histOpen.cont === week ? '▲' : '▼' }}</span>
+              </button>
+              <div class="rankings-list" v-if="histOpen.cont === week">
+                <div v-for="(r, i) in songs.slice(0,50)" :key="r.song_id" class="rank-item" @click="playRankSong(r)">
+                  <span class="rank-nr">{{ i + 1 }}</span>
+                  <div class="rank-cover"><img v-if="r.cover_url" :src="r.cover_url" class="rank-cover-img" /><span v-else>♩</span></div>
+                  <div class="rank-info"><span class="rank-name">{{ r.song_name }}</span><span class="rank-artist">{{ r.artist }}</span></div>
+                  <span class="rank-pct">{{ r.like_pct }}%</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="radioLevel === 'global'" key="global-level" class="now-playing-card" :style="{ '--accent': '#f0c832' }">
+        <div class="npc-cover" :style="{ background: 'rgba(240,200,50,0.08)', borderColor: 'rgba(240,200,50,0.25)' }">
+          <img v-if="globalRadio.current?.cover" :src="globalRadio.current.cover" class="npc-cover-img" />
+          <span v-else class="npc-icon">✦</span>
+          <span class="npc-wave" v-if="radioAudio && globalRadio.current"><span></span><span></span><span></span><span></span></span>
+        </div>
+        <div class="npc-info">
+          <span class="npc-station">NyuJam Global Radio</span>
+          <span class="npc-song">{{ globalRadio.current?.name || (globalRadio.loading ? 'Lädt...' : 'Noch keine globalen Songs') }}</span>
+          <span class="npc-artist">{{ globalRadio.current?.artist || (globalRadio.weekend ? '🏆 Globale Top 50' : 'Top Songs weltweit') }}</span>
+        </div>
+        <div class="npc-controls" v-if="globalRadio.current">
+          <button class="npc-mute" @click="toggleMute">
+            <svg v-if="!isMuted" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+        </div>
+        <div class="rankings-wrap" v-if="globalRadio.top50?.length">
+          <div class="rankings-title">{{ globalRadio.weekend ? '🏆 Globale Top 50' : '📊 Globale Charts' }}</div>
+          <div class="rankings-list">
+            <div v-for="(r, i) in globalRadio.top50" :key="r.song_id" class="rank-item" @click="playRankSong(r)">
+              <span class="rank-nr">{{ i + 1 }}</span>
+              <div class="rank-cover"><img v-if="r.cover_url" :src="r.cover_url" class="rank-cover-img" /><span v-else>♩</span></div>
+              <div class="rank-info"><span class="rank-name">{{ r.song_name }}</span><span class="rank-artist">{{ r.artist }}</span></div>
+              <span class="rank-pct">{{ r.like_pct }}%</span>
+            </div>
+          </div>
+        </div>
+        <div class="hist-wrap" v-if="Object.keys(globalRadio.history || {}).length">
+          <div class="hist-title">📅 Vergangene Wochen</div>
+          <div v-for="(songs, week) in globalRadio.history" :key="week" class="hist-week">
+            <button class="hist-week-btn" @click="toggleHistWeek('global', week)">
+              KW {{ weekLabel(week) }} <span>{{ histOpen.global === week ? '▲' : '▼' }}</span>
+            </button>
+            <div class="rankings-list" v-if="histOpen.global === week">
+              <div v-for="(r, i) in songs.slice(0,50)" :key="r.song_id" class="rank-item" @click="playRankSong(r)">
+                <span class="rank-nr">{{ i + 1 }}</span>
+                <div class="rank-cover"><img v-if="r.cover_url" :src="r.cover_url" class="rank-cover-img" /><span v-else>♩</span></div>
+                <div class="rank-info"><span class="rank-name">{{ r.song_name }}</span><span class="rank-artist">{{ r.artist }}</span></div>
+                <span class="rank-pct">{{ r.like_pct }}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Country level panels (existing) -->
 
       <!-- No country selected -->
       <div class="now-playing-card" key="global" v-if="!activeCountry" :style="{ '--accent': '#5b6aff' }">
@@ -205,7 +323,7 @@
 
 <script setup>
 import AdBanner from '@/components/AdBanner.vue'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import * as d3 from 'd3'
 import * as topojson from 'topojson-client'
@@ -218,6 +336,72 @@ const player = usePlayerStore()
 const auth   = useAuthStore()
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
+
+// ── Radio level ────────────────────────────────────────
+const radioLevel = ref('country')
+
+const continentList = [
+  { id: 'europe',   name: 'Europa',         icon: '🇪🇺' },
+  { id: 'namerica', name: 'Nordamerika',     icon: '🌎' },
+  { id: 'samerica', name: 'Südamerika',      icon: '🌎' },
+  { id: 'asia',     name: 'Asien',           icon: '🌏' },
+  { id: 'africa',   name: 'Afrika',          icon: '🌍' },
+  { id: 'oceania',  name: 'Ozeanien',        icon: '🌊' },
+]
+
+const activeContinentRadio = ref(null)
+const continentRadio = ref({ current: null, top50: [], history: {}, weekend: false, loading: false })
+const globalRadio    = ref({ current: null, top50: [], history: {}, weekend: false, loading: false })
+const histOpen = ref({ cont: null, global: null })
+
+async function selectContinent(id) {
+  activeContinentRadio.value = id
+  await loadContinentRadio()
+}
+
+async function loadContinentRadio() {
+  if (!activeContinentRadio.value) return
+  continentRadio.value.loading = true
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`${BASE_URL}/api/radio/continent/${activeContinentRadio.value}`),
+      fetch(`${BASE_URL}/api/radio/continent/${activeContinentRadio.value}/rankings`),
+    ])
+    const state = await stateRes.json()
+    const hist  = await histRes.json()
+    continentRadio.value = { ...state, history: hist, loading: false }
+    // Play current song
+    if (state.current?.url) playRadioSong(state.current)
+  } catch { continentRadio.value.loading = false }
+}
+
+async function loadGlobalRadio() {
+  globalRadio.value.loading = true
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`${BASE_URL}/api/radio/global`),
+      fetch(`${BASE_URL}/api/radio/global/rankings`),
+    ])
+    const state = await stateRes.json()
+    const hist  = await histRes.json()
+    globalRadio.value = { ...state, history: hist, loading: false }
+    if (state.current?.url) playRadioSong(state.current)
+  } catch { globalRadio.value.loading = false }
+}
+
+function toggleHistWeek(type, week) {
+  if (type === 'cont') histOpen.value.cont = histOpen.value.cont === week ? null : week
+  else histOpen.value.global = histOpen.value.global === week ? null : week
+}
+
+function weekLabel(isoDate) {
+  const d = new Date(isoDate)
+  const jan4 = new Date(d.getFullYear(), 0, 4)
+  const weekNum = Math.ceil(((d - jan4) / 86400000 + jan4.getDay() + 1) / 7)
+  return `${weekNum} / ${d.getFullYear()}`
+}
+
+watch(radioLevel, () => stopRadioAudio())
 
 const W = 960
 const H = 500
@@ -298,6 +482,25 @@ function startSyncedPlay(data) {
 
 function stopRadioAudio() {
   if (radioAudio) { radioAudio.pause(); radioAudio.src = ''; radioAudio = null }
+}
+
+function playRadioSong(song, startedAt = null) {
+  stopRadioAudio()
+  if (!song?.url) return
+  const elapsed = startedAt ? (Date.now() - new Date(startedAt).getTime()) / 1000 : 0
+  radioAudio = new Audio(song.url)
+  radioAudio.volume = isMuted.value ? 0 : 1
+  radioAudio.currentTime = Math.max(0, elapsed)
+  radioAudio.play().catch(() => {})
+  radioAudio.onended = async () => {
+    if (radioLevel.value === 'continent' && activeContinentRadio.value) {
+      const res = await fetch(`${BASE_URL}/api/radio/continent/${activeContinentRadio.value}/next`, { method: 'POST' }).catch(() => null)
+      if (res?.ok) { const d = await res.json(); if (d.song?.url) playRadioSong(d.song) }
+    } else if (radioLevel.value === 'global') {
+      const res = await fetch(`${BASE_URL}/api/radio/global/next`, { method: 'POST' }).catch(() => null)
+      if (res?.ok) { const d = await res.json(); if (d.song?.url) playRadioSong(d.song) }
+    }
+  }
 }
 
 function toggleMute() {
@@ -823,4 +1026,27 @@ const glowStyle = computed(() => ({
 @media (max-width: 480px) {
   .page-title { font-size: 1.8rem; }
 }
+
+/* Radio level tabs */
+.radio-tabs { position: relative; z-index: 1; display: flex; gap: 0.5rem; margin-bottom: 1rem; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 8px; padding: 0.3rem; }
+.radio-tab { flex: 1; background: none; border: none; color: rgba(240,237,230,0.4); font-family: 'DM Sans', sans-serif; font-size: 0.8rem; padding: 0.5rem; border-radius: 5px; cursor: pointer; transition: all 0.2s; }
+.radio-tab.active { background: rgba(240,237,230,0.08); color: #f0ede6; }
+.radio-tab:hover:not(.active) { color: rgba(240,237,230,0.7); }
+
+/* Continent grid */
+.continent-panel { position: relative; z-index: 1; width: 100%; max-width: 560px; }
+.cont-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 1rem; }
+.cont-btn { background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.08); border-radius: 8px; padding: 0.75rem 0.5rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 0.3rem; transition: all 0.2s; }
+.cont-btn:hover { border-color: rgba(50,200,160,0.3); background: rgba(50,200,160,0.05); }
+.cont-btn.active { border-color: rgba(50,200,160,0.4); background: rgba(50,200,160,0.08); }
+.cont-icon { font-size: 1.4rem; }
+.cont-name { font-size: 0.68rem; color: rgba(240,237,230,0.5); letter-spacing: 0.05em; text-align: center; }
+.cont-btn.active .cont-name { color: #32c8a0; }
+
+/* Historical rankings */
+.hist-wrap { margin-top: 1rem; border-top: 1px solid rgba(240,237,230,0.07); padding-top: 0.75rem; }
+.hist-title { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.3); margin-bottom: 0.5rem; }
+.hist-week { margin-bottom: 0.5rem; }
+.hist-week-btn { width: 100%; background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.07); border-radius: 4px; padding: 0.5rem 0.85rem; color: rgba(240,237,230,0.45); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; cursor: pointer; display: flex; justify-content: space-between; transition: background 0.2s; }
+.hist-week-btn:hover { background: rgba(240,237,230,0.06); color: #f0ede6; }
 </style>
