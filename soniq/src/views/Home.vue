@@ -80,16 +80,16 @@ const auth    = useAuthStore()
 const hovered = ref(null)
 
 const navItems = [
+  { id: 'about',        icon: '◉',  label: 'About' },  
   { id: 'radio',        icon: '⌇',  label: 'Radio' },
   { id: 'search',       icon: '⊹',  label: 'Suche' },
   { id: 'playlists',    icon: '▤',  label: 'Playlists' },
   { id: 'community',    icon: '◎',  label: 'Freunde' },
   { id: 'chats',        icon: '⌲',  label: 'Chats' },
-  { id: 'donation',     icon: '€',  label: 'Spende' },
   { id: 'upload',       icon: '↑',  label: 'Upload' },
-  { id: 'about',        icon: '◉',  label: 'About' },
-  { id: 'subscription', icon: '★',  label: 'Abos' },
   { id: 'support',      icon: '⌘', label: 'Support' },
+  { id: 'subscription', icon: '★',  label: 'Abos' },
+  { id: 'donation',     icon: '€',  label: 'Spende' },
 ]
 
 // ── Playlist Wheel — echte Daten vom Server ──
