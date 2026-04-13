@@ -110,6 +110,9 @@
             <svg v-if="!isMuted" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
             <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
           </button>
+          <button class="npc-like" :class="{ liked: globalRadio.isLiked }" @click="toggleGlobalLike" :disabled="!auth.isLoggedIn">
+            <svg width="16" height="16" viewBox="0 0 24 24" :fill="globalRadio.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          </button>
         </div>
         <!-- Rankings toggle -->
         <div class="card-rankings-wrap">
@@ -152,6 +155,9 @@
           <button class="npc-mute" @click="toggleMute">
             <svg v-if="!isMuted" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
             <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+          <button class="npc-like" :class="{ liked: continentRadio.isLiked }" @click="toggleContinentLike" :disabled="!auth.isLoggedIn">
+            <svg width="16" height="16" viewBox="0 0 24 24" :fill="continentRadio.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           </button>
         </div>
         <div class="card-rankings-wrap">
@@ -301,8 +307,8 @@ let radioTimer = null
 const isMuted = ref(false)
 
 const countryRadio = ref({ onAir: false, currentSong: null, songStartedAt: null, weekend: false, isLiked: false, weeklyHistory: [] })
-const continentRadio = ref({ current: null, loading: false, history: {} })
-const globalRadio    = ref({ current: null, loading: false, history: {} })
+const continentRadio = ref({ current: null, loading: false, history: {}, isLiked: false })
+const globalRadio    = ref({ current: null, loading: false, history: {}, isLiked: false })
 
 const showRankings = ref({ global: false, continent: false, country: false })
 const histOpen     = ref({ global: null, cont: null, country: null })
@@ -497,9 +503,10 @@ async function loadContinentRadio(id) {
     ])
     const state = await stateRes.json()
     const hist  = await histRes.json()
-    continentRadio.value = { ...state, history: hist, loading: false }
+    const songChanged = state.current?.id !== continentRadio.value.current?.id
+    continentRadio.value = { ...state, history: hist, loading: false, isLiked: songChanged ? false : continentRadio.value.isLiked }
     if (state.current?.url) {
-      playStreamSong(state.current, state.startedAt, 'continent', id)
+      if (songChanged) playStreamSong(state.current, state.startedAt, 'continent', id)
     }
   } catch { continentRadio.value.loading = false }
 }
@@ -514,9 +521,10 @@ async function loadGlobalRadio() {
     ])
     const state = await stateRes.json()
     const hist  = await histRes.json()
-    globalRadio.value = { ...state, history: hist, loading: false }
+    const songChangedG = state.current?.id !== globalRadio.value.current?.id
+    globalRadio.value = { ...state, history: hist, loading: false, isLiked: songChangedG ? false : globalRadio.value.isLiked }
     if (state.current?.url) {
-      playStreamSong(state.current, state.startedAt, 'global', null)
+      if (songChangedG) playStreamSong(state.current, state.startedAt, 'global', null)
     }
   } catch { globalRadio.value.loading = false }
 }
@@ -559,6 +567,26 @@ async function toggleLike() {
   await fetch(`${BASE_URL}/api/radio/country/${code}/${wasLiked ? 'unlike' : 'like'}`, {
     method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
   }).catch(() => { countryRadio.value.isLiked = wasLiked })
+}
+
+async function toggleContinentLike() {
+  if (!auth.isLoggedIn || !continentRadio.value.current || !activeContinent.value) return
+  const songId   = continentRadio.value.current.id
+  const wasLiked = continentRadio.value.isLiked
+  continentRadio.value.isLiked = !wasLiked
+  await fetch(`${BASE_URL}/api/radio/continent/${activeContinent.value.id}/${wasLiked ? 'unlike' : 'like'}`, {
+    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+  }).catch(() => { continentRadio.value.isLiked = wasLiked })
+}
+
+async function toggleGlobalLike() {
+  if (!auth.isLoggedIn || !globalRadio.value.current) return
+  const songId   = globalRadio.value.current.id
+  const wasLiked = globalRadio.value.isLiked
+  globalRadio.value.isLiked = !wasLiked
+  await fetch(`${BASE_URL}/api/radio/global/${wasLiked ? 'unlike' : 'like'}`, {
+    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+  }).catch(() => { globalRadio.value.isLiked = wasLiked })
 }
 
 function playRankSong(r) {

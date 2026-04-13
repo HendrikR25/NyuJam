@@ -1102,7 +1102,7 @@ app.post('/api/donations/create-payment-intent', async (req, res) => {
             currency: 'eur',
             unit_amount: Math.round(amount * 100),
             product_data: {
-              name:        `Spende an ${artist.username}`,
+              name:        `Tip an ${artist.username}`,
               description: message || undefined,
             },
           },
@@ -1128,7 +1128,7 @@ app.post('/api/donations/create-payment-intent', async (req, res) => {
           currency: 'eur',
           unit_amount: Math.round(amount * 100),
           product_data: {
-            name:        'Spende an NyuJam',
+            name:        'Support NyuJam',
             description: message || undefined,
           },
         },
@@ -1629,6 +1629,45 @@ app.post('/api/radio/continent/:code/next', async (req, res) => {
   res.json({ song })
 })
 
+// POST /api/radio/continent/:code/like
+app.post('/api/radio/continent/:code/like', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const continent = req.params.code.toLowerCase()
+  const { songId } = req.body
+  if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  const weekStart = getUtcWeekStart()
+  await sb.from('radio_continent_likes').upsert({
+    song_id: songId.replace(/^u_/, ''), user_id: user.id, continent, week_start: weekStart
+  }, { onConflict: 'song_id,user_id,continent,week_start' })
+  // Update like_pct in radio_rankings_continent immediately
+  await updateContinentLikePct(songId.replace(/^u_/, ''), continent, weekStart)
+  res.json({ ok: true })
+})
+
+// POST /api/radio/continent/:code/unlike
+app.post('/api/radio/continent/:code/unlike', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const continent = req.params.code.toLowerCase()
+  const { songId } = req.body
+  const weekStart = getUtcWeekStart()
+  await sb.from('radio_continent_likes').delete()
+    .eq('song_id', songId.replace(/^u_/, '')).eq('user_id', user.id)
+    .eq('continent', continent).eq('week_start', weekStart)
+  await updateContinentLikePct(songId.replace(/^u_/, ''), continent, weekStart)
+  res.json({ ok: true })
+})
+
+async function updateContinentLikePct(songId, continent, weekStart) {
+  const { count: likes }     = await sb.from('radio_continent_likes').select('*', { count: 'exact', head: true }).eq('song_id', songId).eq('continent', continent).eq('week_start', weekStart)
+  const { count: listeners } = await sb.from('radio_rankings_continent').select('listeners', { count: 'exact', head: true }).eq('song_id', songId).eq('continent', continent).eq('week_start', weekStart)
+  const { data: row }        = await sb.from('radio_rankings_continent').select('listeners').eq('song_id', songId).eq('continent', continent).eq('week_start', weekStart).single()
+  const totalListeners = row?.listeners || 1
+  const like_pct = Math.round(((likes || 0) / totalListeners) * 10000) / 100
+  await sb.from('radio_rankings_continent').update({ likes: likes || 0, like_pct }).eq('song_id', songId).eq('continent', continent).eq('week_start', weekStart)
+}
+
 app.get('/api/radio/continent/:code/rankings', async (req, res) => {
   const continent = req.params.code.toLowerCase()
   const { data } = await sb.from('radio_rankings_continent').select('*')
@@ -1706,6 +1745,40 @@ app.post('/api/radio/global/next', async (req, res) => {
   const song = await advanceGlobalSong()
   res.json({ song })
 })
+
+// POST /api/radio/global/like
+app.post('/api/radio/global/like', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { songId } = req.body
+  if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  const weekStart = getUtcWeekStart()
+  await sb.from('radio_global_likes').upsert({
+    song_id: songId.replace(/^u_/, ''), user_id: user.id, week_start: weekStart
+  }, { onConflict: 'song_id,user_id,week_start' })
+  await updateGlobalLikePct(songId.replace(/^u_/, ''), weekStart)
+  res.json({ ok: true })
+})
+
+// POST /api/radio/global/unlike
+app.post('/api/radio/global/unlike', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { songId } = req.body
+  const weekStart = getUtcWeekStart()
+  await sb.from('radio_global_likes').delete()
+    .eq('song_id', songId.replace(/^u_/, '')).eq('user_id', user.id).eq('week_start', weekStart)
+  await updateGlobalLikePct(songId.replace(/^u_/, ''), weekStart)
+  res.json({ ok: true })
+})
+
+async function updateGlobalLikePct(songId, weekStart) {
+  const { count: likes } = await sb.from('radio_global_likes').select('*', { count: 'exact', head: true }).eq('song_id', songId).eq('week_start', weekStart)
+  const { data: row }    = await sb.from('radio_rankings_global').select('listeners').eq('song_id', songId).eq('week_start', weekStart).single()
+  const totalListeners = row?.listeners || 1
+  const like_pct = Math.round(((likes || 0) / totalListeners) * 10000) / 100
+  await sb.from('radio_rankings_global').update({ likes: likes || 0, like_pct }).eq('song_id', songId).eq('week_start', weekStart)
+}
 
 app.get('/api/radio/global/rankings', async (req, res) => {
   const { data } = await sb.from('radio_rankings_global').select('*')
@@ -1795,13 +1868,11 @@ async function saveCountryRanking(country, date) {
 // Build continent rankings from last week's country Top 10s
 async function buildContinentRankings() {
   const weekStart = getUtcWeekStart()
-  // Get the previous week start (this runs Monday, so previous week = last Mon)
   const prevWeekDate = new Date(weekStart)
   prevWeekDate.setUTCDate(prevWeekDate.getUTCDate() - 7)
   const prevWeekStart = prevWeekDate.toISOString().split('T')[0]
 
   for (const continent of CONTINENTS) {
-    // Get all countries in this continent
     const countries = Object.entries(countryToContinent)
       .filter(([, c]) => c === continent).map(([k]) => k)
 
@@ -1820,7 +1891,14 @@ async function buildContinentRankings() {
       }
     }
 
-    // Save all to continent rankings
+    // Also count likes received during continent playback (previous week)
+    const { data: continentLikes } = await sb.from('radio_continent_likes')
+      .select('song_id').eq('continent', continent).eq('week_start', prevWeekStart)
+    for (const l of continentLikes || []) {
+      if (allSongs[l.song_id]) allSongs[l.song_id].total_likes += 1
+    }
+
+    // Save to continent rankings for the NEW week
     for (const s of Object.values(allSongs)) {
       const like_pct = s.total_listeners > 0 ? Math.round((s.total_likes / s.total_listeners) * 10000) / 100 : 0
       await sb.from('radio_rankings_continent').upsert({
@@ -1855,6 +1933,12 @@ async function buildGlobalRankings() {
       allSongs[s.song_id].total_listeners += s.listeners
       allSongs[s.song_id].total_likes     += s.likes
     }
+  }
+
+  // Also count likes received during global playback (previous week)
+  const { data: globalLikes } = await sb.from('radio_global_likes').select('song_id').eq('week_start', prevWeekStart)
+  for (const l of globalLikes || []) {
+    if (allSongs[l.song_id]) allSongs[l.song_id].total_likes += 1
   }
 
   for (const s of Object.values(allSongs)) {
