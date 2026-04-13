@@ -1596,22 +1596,23 @@ async function advanceContinentSong(continent) {
 app.get('/api/radio/continent/:code', async (req, res) => {
   const continent = req.params.code.toLowerCase()
   if (!CONTINENTS.includes(continent)) return res.status(400).json({ error: 'Unbekannter Kontinent' })
-  const weekend = isUtcWeekend()
+  const weekend   = isUtcWeekend()
   const weekStart = getUtcWeekStart()
 
-  // Get current state
-  const state = await getContinentState(continent)
+  let state   = await getContinentState(continent)
   let current = state?.current_song || null
 
-  // Check if song is still playing (assume avg song 3.5 min)
   if (current && state.song_started_at) {
     const elapsed = (Date.now() - new Date(state.song_started_at).getTime()) / 1000
-    if (elapsed > 210) current = await advanceContinentSong(continent)
+    if (elapsed > 210) {
+      current = await advanceContinentSong(continent)
+      state   = await getContinentState(continent) // refresh for updated startedAt
+    }
   } else {
     current = await advanceContinentSong(continent)
+    state   = await getContinentState(continent)
   }
 
-  // Get top 50 for display
   const { data: top50 } = await sb.from('radio_rankings_continent')
     .select('*').eq('continent', continent).eq('week_start', weekStart)
     .order('like_pct', { ascending: false }).limit(50)

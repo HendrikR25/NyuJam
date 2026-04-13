@@ -395,9 +395,9 @@ async function onFeatureClick(f) {
     const iso = f.alpha2 || f.iso
     activeCountry.value = { iso, alpha2: f.alpha2, name: f.name, centroid: f.centroid, id: f.iso }
     zoomToCountry(f.iso)
-    stopRadioAudio()
-    showRankings.value.country = false
+    stopRadioAudio() // stop continent audio immediately
     clearInterval(radioTimer)
+    showRankings.value.country = false
     await loadCountryRadio(iso)
     radioTimer = setInterval(() => loadCountryRadio(iso), 5000)
   }
@@ -472,7 +472,8 @@ async function loadCountryRadio(code) {
         }).catch(() => {})
       }
     }
-    if (!data.onAir) stopRadioAudio()
+    // Stop any continent/global audio if country has no song or is off air
+    if (!data.onAir || !data.currentSong) stopRadioAudio()
   } catch {}
 }
 
@@ -506,7 +507,10 @@ async function loadContinentRadio(id) {
     const songChanged = state.current?.id !== continentRadio.value.current?.id
     continentRadio.value = { ...state, history: hist, loading: false, isLiked: songChanged ? false : continentRadio.value.isLiked }
     if (state.current?.url) {
-      if (songChanged) playStreamSong(state.current, state.startedAt, 'continent', id)
+      // Play if song changed OR no audio is currently running
+      if (songChanged || !radioAudio) {
+        playStreamSong(state.current, state.startedAt, 'continent', id)
+      }
     }
   } catch { continentRadio.value.loading = false }
 }
@@ -524,7 +528,9 @@ async function loadGlobalRadio() {
     const songChangedG = state.current?.id !== globalRadio.value.current?.id
     globalRadio.value = { ...state, history: hist, loading: false, isLiked: songChangedG ? false : globalRadio.value.isLiked }
     if (state.current?.url) {
-      if (songChangedG) playStreamSong(state.current, state.startedAt, 'global', null)
+      if (songChangedG || !radioAudio) {
+        playStreamSong(state.current, state.startedAt, 'global', null)
+      }
     }
   } catch { globalRadio.value.loading = false }
 }
