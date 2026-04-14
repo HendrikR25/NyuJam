@@ -225,7 +225,7 @@ export const usePlayerStore = defineStore('player', () => {
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
     loadSongs, loadFavorites, play, togglePlay,
-    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced, adoptRadioAudio, stopRadioMirror,
+    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, playRadioSynced, adoptRadioAudio, stopRadioMirror,
     // expose audio element for seek
     get audioEl() { return getAudio() },
   }

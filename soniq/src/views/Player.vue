@@ -235,7 +235,10 @@ onMounted(() => {
   if (!player.songs.length)             player.loadSongs()
   if (!player.likedSongs.length)        player.loadFavorites()
   if (!playlistsStore.playlists.length) playlistsStore.load()
-  player.fromRoute = route.query.from ? `/${route.query.from}` : '/'
+  // Don't override fromRoute if we came from radio (already set by RadioView)
+  if (!player.isRadioMode) {
+    player.fromRoute = route.query.from ? `/${route.query.from}` : '/'
+  }
   loadCommentsMeta()
 })
 onUnmounted(() => {})
