@@ -252,7 +252,7 @@ const tracks         = ref([{ title: '', artist: '', file: null }])
 const trackFileRefs  = ref([])
 
 // ── Country data ───────────────────────────────────────
-const continentLabels = { europe:'Europe', namerica:'North America', samerica:'South America', asia:'Asia', africa:'Africa', oceania:'Oceania', mideast:'Middle East', caribbean:'Caribbean', caucasus:'Caucasus & Central Asia' }
+const continentLabels = { europe:'Europe', namerica:'North America', samerica:'South America', asia:'Asia', africa:'Africa', oceania:'Oceania', mideast:'West Asia', caribbean:'Caribbean', caucasus:'Caucasus & Central Asia' }
 const countryGroups = [
   { continent:'europe', label:'🌍 Europe', countries:[
     {code:'AL',name:'Albania',flag:'🇦🇱'},{code:'AD',name:'Andorra',flag:'🇦🇩'},{code:'AT',name:'Austria',flag:'🇦🇹'},
@@ -323,7 +323,7 @@ const countryGroups = [
     {code:'BW',name:'Botswana',flag:'🇧🇼'},{code:'LS',name:'Lesotho',flag:'🇱🇸'},{code:'NA',name:'Namibia',flag:'🇳🇦'},
     {code:'ZA',name:'South Africa',flag:'🇿🇦'},{code:'SZ',name:'Eswatini',flag:'🇸🇿'},
   ]},
-  { continent:'mideast', label:'🕌 Middle East', countries:[
+  { continent:'mideast', label:'🌏 West Asia', countries:[
     {code:'BH',name:'Bahrain',flag:'🇧🇭'},{code:'IR',name:'Iran',flag:'🇮🇷'},{code:'IQ',name:'Iraq',flag:'🇮🇶'},
     {code:'IL',name:'Israel',flag:'🇮🇱'},{code:'JO',name:'Jordan',flag:'🇯🇴'},{code:'KW',name:'Kuwait',flag:'🇰🇼'},
     {code:'LB',name:'Lebanon',flag:'🇱🇧'},{code:'OM',name:'Oman',flag:'🇴🇲'},{code:'PS',name:'Palestine',flag:'🇵🇸'},
