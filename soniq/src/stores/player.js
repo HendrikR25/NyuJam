@@ -98,41 +98,34 @@ export const usePlayerStore = defineStore('player', () => {
     setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
-  // Play a radio song synced to the exact position it's at in the radio
-  function playRadioSynced(song, startedAt) {
-    const audio   = getAudio()
-    // Calculate elapsed at call time — do this BEFORE async operations
-    const elapsed = startedAt ? Math.max(0, (Date.now() - new Date(startedAt).getTime()) / 1000) : 0
-
+  // Adopt an already-playing radio audio element into the player
+  // No new loading — the song just continues playing, player UI reflects it
+  function adoptRadioAudio(externalAudio, song) {
+    // Stop any current player audio
+    if (_audio && _audio !== externalAudio) {
+      _audio.pause()
+      _audio.src = ''
+    }
+    // Take over the external audio element as our internal one
+    _audio = externalAudio
+    // Re-attach player event listeners to the new audio element
+    _audio.addEventListener('timeupdate',     () => { currentTime.value = _audio.currentTime })
+    _audio.addEventListener('loadedmetadata', () => { duration.value    = _audio.duration })
+    _audio.addEventListener('canplay',        () => { isLoading.value   = false })
+    _audio.addEventListener('error',          () => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+    // Set player state to reflect what's already playing
     currentSong.value = song
-    isPlaying.value   = false
-    isLoading.value   = true
+    isPlaying.value   = !externalAudio.paused
+    isLoading.value   = false
     error.value       = null
-    currentTime.value = 0
-    duration.value    = 0
+    currentTime.value = externalAudio.currentTime
+    duration.value    = externalAudio.duration || 0
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
+  }
 
-    audio.src = song.url
-
-    // Use loadedmetadata for reliable seeking — fires when duration is known
-    audio.addEventListener('loadedmetadata', () => {
-      if (elapsed > 0 && elapsed < audio.duration) {
-        audio.currentTime = elapsed
-      }
-    }, { once: true })
-
-    audio.addEventListener('canplay', () => {
-      // Re-confirm seek position in case loadedmetadata ran first
-      if (elapsed > 0 && Math.abs(audio.currentTime - elapsed) > 2) {
-        audio.currentTime = elapsed
-      }
-      audio.play()
-        .then(() => { isPlaying.value = true; isLoading.value = false })
-        .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
-    }, { once: true })
-
-    audio.load()
-    setTimeout(() => { if (isLoading.value) { audio.play().catch(() => {}) } }, 4000)
+  // Keep for backwards compat but simplified — no longer used for radio
+  function playRadioSynced(song, startedAt) {
+    play(song)
   }
 
   function togglePlay() {
@@ -231,7 +224,7 @@ export const usePlayerStore = defineStore('player', () => {
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
     loadSongs, loadFavorites, play, togglePlay,
-    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced,
+    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced, adoptRadioAudio,
     // expose audio element for seek
     get audioEl() { return getAudio() },
   }
