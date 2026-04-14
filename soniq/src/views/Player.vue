@@ -37,6 +37,7 @@
       <button class="song-artist-btn" @click="router.push(`/artist/${encodeURIComponent(player.currentSong.artist)}`)">
         {{ player.currentSong.artist }}
       </button>
+      <div v-if="player.isRadioMode" class="radio-mode-badge">📻 Radio läuft</div>
     </div>
     <div class="song-info song-info--empty" v-else>
       <span class="song-artist">Kein Song ausgewählt</span>
@@ -87,18 +88,18 @@
         <span class="tip-symbol">€</span>
       </button>
 
-      <button class="ctrl-btn ctrl-skip" @click="player.prev()" :disabled="!player.hasPrev">
+      <button class="ctrl-btn ctrl-skip" @click="player.prev()" :disabled="!player.hasPrev || player.isRadioMode">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
       </button>
 
-      <button class="ctrl-btn ctrl-play" @click="player.togglePlay()">
+      <button class="ctrl-btn ctrl-play" @click="player.isRadioMode ? null : player.togglePlay()" :style="player.isRadioMode ? { opacity: 0.4, cursor: 'default' } : {}">
         <transition name="icon-switch" mode="out-in">
           <svg v-if="player.isPlaying" key="pause" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
           <svg v-else key="play" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </transition>
       </button>
 
-      <button class="ctrl-btn ctrl-skip" @click="player.next()" :disabled="!player.hasNext">
+      <button class="ctrl-btn ctrl-skip" @click="player.next()" :disabled="!player.hasNext || player.isRadioMode">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
       </button>
 
@@ -351,6 +352,7 @@ function endScrub() {
   text-decoration-color: rgba(240,237,230,0.2);
 }
 .song-artist-btn:hover { color: #f0ede6; text-decoration-color: rgba(240,237,230,0.5); }
+.radio-mode-badge { font-size: 0.65rem; color: rgba(240,237,230,0.35); letter-spacing: 0.1em; margin-top: 0.3rem; }
 
 /* Progress */
 .progress-section { position: relative; z-index: 1; width: 100%; max-width: 380px; margin-bottom: 2.5rem; animation: fadeUp 0.5s 0.22s ease both; }

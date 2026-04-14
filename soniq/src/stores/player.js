@@ -17,6 +17,7 @@ export const usePlayerStore = defineStore('player', () => {
   const isLiked     = ref(false)
   const likedSongs  = ref([])   // reactive list from server
   const fromRoute   = ref('/')
+  const isRadioMode = ref(false)
 
   // ── Getters ────────────────────────────────────────────
   const progressPct  = computed(() => duration.value > 0 ? (currentTime.value / duration.value) * 100 : 0)
@@ -26,7 +27,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   // ── Audio ──────────────────────────────────────────────
   let _audio = null
-  let _radioAudio = null  // reference to external radio audio when mirroring
+  let _radioMirrorInterval = null
 
   function getAudio() {
     if (!_audio) {
@@ -41,9 +42,27 @@ export const usePlayerStore = defineStore('player', () => {
     return _audio
   }
 
-  // Returns the active audio — radio audio if mirroring, else internal
-  function activeAudio() {
-    return _radioAudio || _audio
+  // Mirror radio audio state into player — no audio loading, just UI sync
+  function adoptRadioAudio(externalAudio, song) {
+    stopRadioMirror()
+    isRadioMode.value = true
+    currentSong.value = song
+    isPlaying.value   = true
+    isLoading.value   = false
+    error.value       = null
+    currentTime.value = externalAudio.currentTime
+    duration.value    = externalAudio.duration || 0
+    isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
+    _radioMirrorInterval = setInterval(() => {
+      currentTime.value = externalAudio.currentTime
+      duration.value    = externalAudio.duration || 0
+      isPlaying.value   = !externalAudio.paused
+    }, 250)
+  }
+
+  function stopRadioMirror() {
+    if (_radioMirrorInterval) { clearInterval(_radioMirrorInterval); _radioMirrorInterval = null }
+    isRadioMode.value = false
   }
 
   // ── Songs ──────────────────────────────────────────────
@@ -71,8 +90,8 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function play(song) {
-    stopRadioMirror()  // exit radio mirror mode when playing a regular song
-    const audio       = getAudio()
+    stopRadioMirror()  // clears isRadioMode too
+    const audio = getAudio()
     currentSong.value = song
     isPlaying.value   = false
     isLoading.value   = true
@@ -105,50 +124,20 @@ export const usePlayerStore = defineStore('player', () => {
     setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
-  let _radioMirrorInterval = null
-  function adoptRadioAudio(externalAudio, song) {
-    if (_radioMirrorInterval) { clearInterval(_radioMirrorInterval); _radioMirrorInterval = null }
-
-    _radioAudio = externalAudio  // store ref so togglePlay/seek use it
-
-    currentSong.value = song
-    isPlaying.value   = !externalAudio.paused
-    isLoading.value   = false
-    error.value       = null
-    currentTime.value = externalAudio.currentTime
-    duration.value    = externalAudio.duration || 0
-    isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
-
-    // Sync currentTime every 250ms
-    _radioMirrorInterval = setInterval(() => {
-      if (!externalAudio || !_radioAudio) { clearInterval(_radioMirrorInterval); return }
-      currentTime.value = externalAudio.currentTime
-      duration.value    = externalAudio.duration || 0
-      isPlaying.value   = !externalAudio.paused
-    }, 250)
-  }
-
-  function stopRadioMirror() {
-    if (_radioMirrorInterval) { clearInterval(_radioMirrorInterval); _radioMirrorInterval = null }
-    _radioAudio = null
-  }
-
   // Keep for backwards compat but simplified — no longer used for radio
   function playRadioSynced(song, startedAt) {
     play(song)
   }
 
   function togglePlay() {
-    const audio = activeAudio()
-    if (!audio) return
+    const audio = getAudio()
     if (!currentSong.value) { if (songs.value.length) play(songs.value[0]); return }
     if (isPlaying.value) { audio.pause(); isPlaying.value = false }
     else { audio.play().then(() => { isPlaying.value = true }).catch(() => {}) }
   }
 
   function seek(time) {
-    const audio = activeAudio()
-    if (!audio) return
+    const audio = getAudio()
     audio.currentTime = time
     currentTime.value = time
   }
@@ -231,7 +220,7 @@ export const usePlayerStore = defineStore('player', () => {
   return {
     // state
     songs, currentSong, isPlaying, currentTime, duration,
-    isLoading, error, volume, isLiked, likedSongs, fromRoute,
+    isLoading, error, volume, isLiked, likedSongs, fromRoute, isRadioMode,
     // getters
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
