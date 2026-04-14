@@ -92,12 +92,19 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
       </button>
 
-      <button class="ctrl-btn ctrl-play" @click="player.isRadioMode ? null : player.togglePlay()" :style="player.isRadioMode ? { opacity: 0.4, cursor: 'default' } : {}">
-        <transition name="icon-switch" mode="out-in">
-          <svg v-if="player.isPlaying" key="pause" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
-          <svg v-else key="play" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-        </transition>
-      </button>
+      <template v-if="player.isRadioMode">
+        <div class="ctrl-btn ctrl-play ctrl-radio-live" title="Radio läuft">
+          <span class="radio-live-dot"></span>
+        </div>
+      </template>
+      <template v-else>
+        <button class="ctrl-btn ctrl-play" @click="player.togglePlay()">
+          <transition name="icon-switch" mode="out-in">
+            <svg v-if="player.isPlaying" key="pause" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+            <svg v-else key="play" width="26" height="26" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </transition>
+        </button>
+      </template>
 
       <button class="ctrl-btn ctrl-skip" @click="player.next()" :disabled="!player.hasNext || player.isRadioMode">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
@@ -395,6 +402,10 @@ function endScrub() {
 .tip-symbol { font-size: 1rem; font-weight: 600; line-height: 1; }
 .ctrl-play { width: 62px; height: 62px; background: #32c8a0; color: #080b0a !important; border-radius: 50% !important; box-shadow: 0 0 28px #32c8a055; margin: 0 0.35rem; }
 .ctrl-play:hover { transform: scale(1.08) !important; box-shadow: 0 0 40px #32c8a088 !important; }
+.ctrl-radio-live { display: flex; align-items: center; justify-content: center; cursor: default; background: rgba(255,90,50,0.15) !important; box-shadow: 0 0 28px rgba(255,90,50,0.2) !important; }
+.ctrl-radio-live:hover { transform: none !important; }
+.radio-live-dot { width: 14px; height: 14px; border-radius: 50%; background: #ff5a32; animation: pulse-radio 1.4s ease infinite; }
+@keyframes pulse-radio { 0%,100% { opacity:1; transform:scale(1); box-shadow:0 0 0 0 rgba(255,90,50,0.5); } 50% { opacity:0.8; transform:scale(1.15); box-shadow:0 0 0 6px rgba(255,90,50,0); } }
 .ctrl-heart { color: rgba(240,237,230,0.35); }
 .ctrl-heart.liked { color: #ff5a32 !important; }
 
