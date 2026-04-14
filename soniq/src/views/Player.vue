@@ -20,9 +20,9 @@
 
     <!-- Cover -->
     <div class="cover-wrap">
-      <div class="cover" :class="{ playing: player.isPlaying, loading: player.isLoading }">
+      <div class="cover" :class="{ playing: player.isRadioMode || player.isPlaying, loading: player.isLoading }">
         <div class="cover-inner" :style="{ background: coverGradient }">
-          <img v-if="player.currentSong?.cover && !player.isLoading" :src="player.currentSong.cover" class="cover-img" />
+          <img v-if="displaySong?.cover" :src="displaySong.cover" class="cover-img" />
           <span v-else-if="player.isLoading" class="cover-spinner"></span>
           <span v-else class="cover-icon">{{ songIcon }}</span>
         </div>
@@ -31,11 +31,11 @@
     </div>
 
     <!-- Song info -->
-    <div class="song-info" v-if="player.currentSong">
-      <h1 class="song-title">{{ player.currentSong.name }}</h1>
+    <div class="song-info" v-if="displaySong">
+      <h1 class="song-title">{{ displaySong.name }}</h1>
       <span class="song-sep">—</span>
-      <button class="song-artist-btn" @click="router.push(`/artist/${encodeURIComponent(player.currentSong.artist)}`)">
-        {{ player.currentSong.artist }}
+      <button class="song-artist-btn" @click="router.push(`/artist/${encodeURIComponent(displaySong.artist)}`)">
+        {{ displaySong.artist }}
       </button>
       <div v-if="player.isRadioMode" class="radio-mode-badge">📻 Radio läuft</div>
     </div>
@@ -46,9 +46,9 @@
     <!-- Progress -->
     <div class="progress-section">
       <div class="progress-meta">
-        <span class="time-current">{{ player.formatTime(player.currentTime) }}</span>
+        <span class="time-current">{{ player.formatTime(displayTime) }}</span>
         <div class="meta-right">
-          <span class="time-total">{{ player.formatTime(player.duration) }}</span>
+          <span class="time-total">{{ player.formatTime(displayDur) }}</span>
           <button class="chat-btn" title="Kommentare" @click="router.push('/comments')">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             <span class="chat-btn-count" v-if="commentCount > 0">{{ commentCount }}</span>
@@ -67,18 +67,17 @@
       </transition>
 
       <!-- Scrubber -->
-      <div class="scrubber" ref="scrubberRef" @mousedown="startScrub" @touchstart.prevent="startScrub">
+      <div class="scrubber" ref="scrubberRef" @mousedown="!player.isRadioMode && startScrub($event)" @touchstart.prevent="!player.isRadioMode && startScrub($event)">
         <div class="scrubber-track">
-          <div class="scrubber-fill" :style="{ width: player.progressPct + '%' }"></div>
-          <!-- Timestamp markers -->
+          <div class="scrubber-fill" :style="{ width: displayPct + '%' }"></div>
           <div
             v-for="c in timestampComments" :key="c.id"
             class="ts-marker"
-            :style="{ left: (c.timestampSec / player.duration * 100) + '%' }"
+            :style="{ left: (c.timestampSec / displayDur * 100) + '%' }"
             :title="c.username + ': ' + c.text"
           ></div>
         </div>
-        <div class="scrubber-dot" :style="{ left: player.progressPct + '%' }"></div>
+        <div class="scrubber-dot" :style="{ left: displayPct + '%' }"></div>
       </div>
     </div>
 
@@ -173,6 +172,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { usePlayerStore }    from '@/stores/player'
 import { useAuthStore }      from '@/stores/auth'
 import { usePlaylistsStore } from '@/stores/playlists'
+import { radioState }        from '@/stores/radioState'
 
 const router = useRouter()
 const route  = useRoute()
@@ -185,6 +185,17 @@ function authHeader() {
   const t = localStorage.getItem('nyujam_token') || ''
   return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
 }
+
+// ── Radio mode ─────────────────────────────────────────
+// When player.isRadioMode, we read directly from radioState instead of player store
+const radioCurrentTime = ref(0)
+const radioDuration    = ref(0)
+let   radioInterval    = null
+
+const displaySong    = computed(() => player.isRadioMode ? radioState.song  : player.currentSong)
+const displayTime    = computed(() => player.isRadioMode ? radioCurrentTime.value : player.currentTime)
+const displayDur     = computed(() => player.isRadioMode ? radioDuration.value    : player.duration)
+const displayPct     = computed(() => displayDur.value > 0 ? (displayTime.value / displayDur.value) * 100 : 0)
 
 // ── Comments (timestamp overlay only) ─────────────────
 const commentCount           = ref(0)
@@ -239,18 +250,29 @@ function avatarColor(name) {
 }
 
 onMounted(() => {
-  if (!player.songs.length)             player.loadSongs()
-  if (!player.likedSongs.length)        player.loadFavorites()
-  if (!playlistsStore.playlists.length) playlistsStore.load()
-  // Don't override fromRoute if we came from radio (already set by RadioView)
-  if (!player.isRadioMode) {
+  if (player.isRadioMode && radioState.audio) {
+    radioCurrentTime.value = radioState.audio.currentTime
+    radioDuration.value    = radioState.audio.duration || 0
+    radioInterval = setInterval(() => {
+      if (radioState.audio) {
+        radioCurrentTime.value = radioState.audio.currentTime
+        radioDuration.value    = radioState.audio.duration || 0
+      }
+    }, 250)
+  } else {
+    if (!player.songs.length)             player.loadSongs()
+    if (!player.likedSongs.length)        player.loadFavorites()
+    if (!playlistsStore.playlists.length) playlistsStore.load()
     player.fromRoute = route.query.from ? `/${route.query.from}` : '/'
   }
   loadCommentsMeta()
 })
-onUnmounted(() => {})
+onUnmounted(() => {
+  if (radioInterval) { clearInterval(radioInterval); radioInterval = null }
+})
 
 function goBack() {
+  if (player.isRadioMode) player.isRadioMode = false
   router.replace(player.fromRoute || '/')
 }
 
@@ -273,7 +295,10 @@ const coverGradients = [
 ]
 const accentColors = ['#32c8a0','#5b6aff','#ff5a32','#c864f0','#f0c832']
 
-const songIndex    = computed(() => player.currentIndex)
+const songIndex    = computed(() => player.isRadioMode
+  ? (radioState.song?.name?.charCodeAt(0) || 0) % 8
+  : player.currentIndex
+)
 const coverGradient = computed(() => coverGradients[songIndex.value % coverGradients.length])
 const accentColor  = computed(() => accentColors[songIndex.value % accentColors.length])
 const songIcon     = computed(() => ['🌿','◈','⚡','🌙','◎','⊹','◇','🌊'][songIndex.value % 8])

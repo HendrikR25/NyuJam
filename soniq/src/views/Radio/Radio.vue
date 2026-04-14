@@ -281,6 +281,7 @@ import * as d3 from 'd3'
 import * as topojson from 'topojson-client'
 import { usePlayerStore } from '@/stores/player'
 import { useAuthStore } from '@/stores/auth'
+import { radioState } from '@/stores/radioState'
 
 const router = useRouter()
 const player = usePlayerStore()
@@ -488,6 +489,8 @@ function startSyncedPlay(data) {
   radioAudio.volume = isMuted.value ? 0 : 1
   radioAudio.currentTime = Math.max(0, elapsed)
   radioAudio.play().catch(() => {})
+  radioState.audio = radioAudio
+  radioState.song  = data.currentSong
   radioAudio.onended = () => {
     if (!activeCountry.value) return
     fetch(`${BASE_URL}/api/radio/country/${activeCountry.value.iso}/next`, {
@@ -541,6 +544,8 @@ async function loadGlobalRadio() {
 // ── Audio helpers ──────────────────────────────────────
 function stopRadioAudio() {
   if (radioAudio) { radioAudio.pause(); radioAudio.src = ''; radioAudio = null }
+  radioState.audio = null
+  radioState.song  = null
 }
 
 function playStreamSong(song, startedAt, level, id) {
@@ -551,6 +556,8 @@ function playStreamSong(song, startedAt, level, id) {
   radioAudio.volume = isMuted.value ? 0 : 1
   radioAudio.currentTime = Math.max(0, elapsed)
   radioAudio.play().catch(() => {})
+  radioState.audio = radioAudio
+  radioState.song  = song
   radioAudio.onended = async () => {
     if (level === 'continent' && id) {
       const res = await fetch(`${BASE_URL}/api/radio/continent/${id}/next`, { method: 'POST' }).catch(() => null)
@@ -609,11 +616,8 @@ function playRankSong(r) {
 // Open radio song in player — adopt the already-playing audio, no restart
 function playCurrentSong(song) {
   if (!radioAudio) return
-  player.adoptRadioAudio(radioAudio, {
-    id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url
-  })
-  radioFollowing.value = true
   player.fromRoute = '/radio'
+  player.isRadioMode = true
   router.push('/player')
 }
 
