@@ -113,14 +113,20 @@ export const usePlayerStore = defineStore('player', () => {
     audio.load()
 
     const tryPlay = () => {
-      audio.currentTime = Math.max(0, elapsed)
-      audio.play()
-        .then(() => { isPlaying.value = true; isLoading.value = false })
-        .catch(e => {
-          error.value     = 'Wiedergabe fehlgeschlagen.'
-          isPlaying.value = false
-          isLoading.value = false
-        })
+      // Set currentTime after canplay — browser can seek now
+      if (elapsed > 0) {
+        audio.currentTime = elapsed
+        // Wait for seeked event before playing to avoid starting at 0
+        audio.addEventListener('seeked', () => {
+          audio.play()
+            .then(() => { isPlaying.value = true; isLoading.value = false })
+            .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+        }, { once: true })
+      } else {
+        audio.play()
+          .then(() => { isPlaying.value = true; isLoading.value = false })
+          .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+      }
     }
     audio.addEventListener('canplay', tryPlay, { once: true })
     setTimeout(() => { if (isLoading.value) tryPlay() }, 3000)
