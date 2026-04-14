@@ -252,24 +252,25 @@ const tracks         = ref([{ title: '', artist: '', file: null }])
 const trackFileRefs  = ref([])
 
 // ── Country data ───────────────────────────────────────
-const continentLabels = { europe:'Europa', namerica:'Nordamerika', samerica:'Südamerika', asia:'Asien', africa:'Afrika', oceania:'Ozeanien' }
+const continentLabels = { europe:'Europe', namerica:'North America', samerica:'South America', asia:'Asia', africa:'Africa', oceania:'Oceania' }
 const countryGroups = [
-  { continent:'europe',   label:'🌍 Europa', countries:[
-    {code:'DE',name:'Deutschland',flag:'🇩🇪'},{code:'AT',name:'Österreich',flag:'🇦🇹'},
-    {code:'CH',name:'Schweiz',flag:'🇨🇭'},{code:'FR',name:'Frankreich',flag:'🇫🇷'},
-    {code:'GB',name:'Großbritannien',flag:'🇬🇧'},{code:'IT',name:'Italien',flag:'🇮🇹'},
-    {code:'ES',name:'Spanien',flag:'🇪🇸'},{code:'NL',name:'Niederlande',flag:'🇳🇱'},
-    {code:'BE',name:'Belgien',flag:'🇧🇪'},{code:'PL',name:'Polen',flag:'🇵🇱'},
-    {code:'SE',name:'Schweden',flag:'🇸🇪'},{code:'NO',name:'Norwegen',flag:'🇳🇴'},
-    {code:'DK',name:'Dänemark',flag:'🇩🇰'},{code:'FI',name:'Finnland',flag:'🇫🇮'},
-    {code:'PT',name:'Portugal',flag:'🇵🇹'},{code:'GR',name:'Griechenland',flag:'🇬🇷'},
-    {code:'RU',name:'Russland',flag:'🇷🇺'},{code:'UA',name:'Ukraine',flag:'🇺🇦'},{code:'TR',name:'Türkei',flag:'🇹🇷'},
+  { continent:'europe',   label:'🌍 Europe', countries:[
+    {code:'DE',name:'Germany',flag:'🇩🇪'},{code:'AT',name:'Austria',flag:'🇦🇹'},
+    {code:'CH',name:'Switzerland',flag:'🇨🇭'},{code:'FR',name:'France',flag:'🇫🇷'},
+    {code:'GB',name:'United Kingdom',flag:'🇬🇧'},{code:'IT',name:'Italy',flag:'🇮🇹'},
+    {code:'ES',name:'Spain',flag:'🇪🇸'},{code:'NL',name:'Netherlands',flag:'🇳🇱'},
+    {code:'BE',name:'Belgium',flag:'🇧🇪'},{code:'PL',name:'Poland',flag:'🇵🇱'},
+    {code:'SE',name:'Sweden',flag:'🇸🇪'},{code:'NO',name:'Norway',flag:'🇳🇴'},
+    {code:'DK',name:'Denmark',flag:'🇩🇰'},{code:'FI',name:'Finland',flag:'🇫🇮'},
+    {code:'PT',name:'Portugal',flag:'🇵🇹'},{code:'GR',name:'Greece',flag:'🇬🇷'},
+    {code:'RU',name:'Russia',flag:'🇷🇺'},{code:'UA',name:'Ukraine',flag:'🇺🇦'},
+    {code:'TR',name:'Turkey',flag:'🇹🇷'},
   ]},
-  { continent:'namerica', label:'🌎 Nordamerika', countries:[{code:'US',name:'USA',flag:'🇺🇸'},{code:'CA',name:'Kanada',flag:'🇨🇦'},{code:'MX',name:'Mexiko',flag:'🇲🇽'}]},
-  { continent:'samerica', label:'🌎 Südamerika', countries:[{code:'BR',name:'Brasilien',flag:'🇧🇷'},{code:'AR',name:'Argentinien',flag:'🇦🇷'},{code:'CO',name:'Kolumbien',flag:'🇨🇴'},{code:'CL',name:'Chile',flag:'🇨🇱'}]},
-  { continent:'asia',     label:'🌏 Asien', countries:[{code:'JP',name:'Japan',flag:'🇯🇵'},{code:'KR',name:'Südkorea',flag:'🇰🇷'},{code:'CN',name:'China',flag:'🇨🇳'},{code:'IN',name:'Indien',flag:'🇮🇳'},{code:'TH',name:'Thailand',flag:'🇹🇭'},{code:'ID',name:'Indonesien',flag:'🇮🇩'},{code:'SG',name:'Singapur',flag:'🇸🇬'},{code:'PH',name:'Philippinen',flag:'🇵🇭'}]},
-  { continent:'africa',   label:'🌍 Afrika', countries:[{code:'NG',name:'Nigeria',flag:'🇳🇬'},{code:'ZA',name:'Südafrika',flag:'🇿🇦'},{code:'GH',name:'Ghana',flag:'🇬🇭'},{code:'KE',name:'Kenia',flag:'🇰🇪'},{code:'EG',name:'Ägypten',flag:'🇪🇬'}]},
-  { continent:'oceania',  label:'🌏 Ozeanien', countries:[{code:'AU',name:'Australien',flag:'🇦🇺'},{code:'NZ',name:'Neuseeland',flag:'🇳🇿'}]},
+  { continent:'namerica', label:'🌎 North America', countries:[{code:'US',name:'USA',flag:'🇺🇸'},{code:'CA',name:'Canada',flag:'🇨🇦'},{code:'MX',name:'Mexico',flag:'🇲🇽'}]},
+  { continent:'samerica', label:'🌎 South America', countries:[{code:'BR',name:'Brazil',flag:'🇧🇷'},{code:'AR',name:'Argentina',flag:'🇦🇷'},{code:'CO',name:'Colombia',flag:'🇨🇴'},{code:'CL',name:'Chile',flag:'🇨🇱'}]},
+  { continent:'asia',     label:'🌏 Asia', countries:[{code:'JP',name:'Japan',flag:'🇯🇵'},{code:'KR',name:'South Korea',flag:'🇰🇷'},{code:'CN',name:'China',flag:'🇨🇳'},{code:'IN',name:'India',flag:'🇮🇳'},{code:'TH',name:'Thailand',flag:'🇹🇭'},{code:'ID',name:'Indonesia',flag:'🇮🇩'},{code:'SG',name:'Singapore',flag:'🇸🇬'},{code:'PH',name:'Philippines',flag:'🇵🇭'}]},
+  { continent:'africa',   label:'🌍 Africa', countries:[{code:'NG',name:'Nigeria',flag:'🇳🇬'},{code:'ZA',name:'South Africa',flag:'🇿🇦'},{code:'GH',name:'Ghana',flag:'🇬🇭'},{code:'KE',name:'Kenya',flag:'🇰🇪'},{code:'EG',name:'Egypt',flag:'🇪🇬'}]},
+  { continent:'oceania',  label:'🌏 Oceania', countries:[{code:'AU',name:'Australia',flag:'🇦🇺'},{code:'NZ',name:'New Zealand',flag:'🇳🇿'}]},
 ]
 
 const selectedContinent = computed(() => {
