@@ -252,25 +252,112 @@ const tracks         = ref([{ title: '', artist: '', file: null }])
 const trackFileRefs  = ref([])
 
 // ── Country data ───────────────────────────────────────
-const continentLabels = { europe:'Europe', namerica:'North America', samerica:'South America', asia:'Asia', africa:'Africa', oceania:'Oceania' }
+const continentLabels = { europe:'Europe', namerica:'North America', samerica:'South America', asia:'Asia', africa:'Africa', oceania:'Oceania', mideast:'Middle East', caribbean:'Caribbean', caucasus:'Caucasus & Central Asia' }
 const countryGroups = [
-  { continent:'europe',   label:'🌍 Europe', countries:[
-    {code:'DE',name:'Germany',flag:'🇩🇪'},{code:'AT',name:'Austria',flag:'🇦🇹'},
-    {code:'CH',name:'Switzerland',flag:'🇨🇭'},{code:'FR',name:'France',flag:'🇫🇷'},
-    {code:'GB',name:'United Kingdom',flag:'🇬🇧'},{code:'IT',name:'Italy',flag:'🇮🇹'},
-    {code:'ES',name:'Spain',flag:'🇪🇸'},{code:'NL',name:'Netherlands',flag:'🇳🇱'},
-    {code:'BE',name:'Belgium',flag:'🇧🇪'},{code:'PL',name:'Poland',flag:'🇵🇱'},
-    {code:'SE',name:'Sweden',flag:'🇸🇪'},{code:'NO',name:'Norway',flag:'🇳🇴'},
-    {code:'DK',name:'Denmark',flag:'🇩🇰'},{code:'FI',name:'Finland',flag:'🇫🇮'},
-    {code:'PT',name:'Portugal',flag:'🇵🇹'},{code:'GR',name:'Greece',flag:'🇬🇷'},
-    {code:'RU',name:'Russia',flag:'🇷🇺'},{code:'UA',name:'Ukraine',flag:'🇺🇦'},
-    {code:'TR',name:'Turkey',flag:'🇹🇷'},
+  { continent:'europe', label:'🌍 Europe', countries:[
+    {code:'AL',name:'Albania',flag:'🇦🇱'},{code:'AD',name:'Andorra',flag:'🇦🇩'},{code:'AT',name:'Austria',flag:'🇦🇹'},
+    {code:'BY',name:'Belarus',flag:'🇧🇾'},{code:'BE',name:'Belgium',flag:'🇧🇪'},{code:'BA',name:'Bosnia & Herzegovina',flag:'🇧🇦'},
+    {code:'BG',name:'Bulgaria',flag:'🇧🇬'},{code:'HR',name:'Croatia',flag:'🇭🇷'},{code:'CY',name:'Cyprus',flag:'🇨🇾'},
+    {code:'CZ',name:'Czech Republic',flag:'🇨🇿'},{code:'DK',name:'Denmark',flag:'🇩🇰'},{code:'EE',name:'Estonia',flag:'🇪🇪'},
+    {code:'FI',name:'Finland',flag:'🇫🇮'},{code:'FR',name:'France',flag:'🇫🇷'},{code:'DE',name:'Germany',flag:'🇩🇪'},
+    {code:'GR',name:'Greece',flag:'🇬🇷'},{code:'HU',name:'Hungary',flag:'🇭🇺'},{code:'IS',name:'Iceland',flag:'🇮🇸'},
+    {code:'IE',name:'Ireland',flag:'🇮🇪'},{code:'IT',name:'Italy',flag:'🇮🇹'},{code:'XK',name:'Kosovo',flag:'🇽🇰'},
+    {code:'LV',name:'Latvia',flag:'🇱🇻'},{code:'LI',name:'Liechtenstein',flag:'🇱🇮'},{code:'LT',name:'Lithuania',flag:'🇱🇹'},
+    {code:'LU',name:'Luxembourg',flag:'🇱🇺'},{code:'MT',name:'Malta',flag:'🇲🇹'},{code:'MD',name:'Moldova',flag:'🇲🇩'},
+    {code:'MC',name:'Monaco',flag:'🇲🇨'},{code:'ME',name:'Montenegro',flag:'🇲🇪'},{code:'NL',name:'Netherlands',flag:'🇳🇱'},
+    {code:'MK',name:'North Macedonia',flag:'🇲🇰'},{code:'NO',name:'Norway',flag:'🇳🇴'},{code:'PL',name:'Poland',flag:'🇵🇱'},
+    {code:'PT',name:'Portugal',flag:'🇵🇹'},{code:'RO',name:'Romania',flag:'🇷🇴'},{code:'RU',name:'Russia',flag:'🇷🇺'},
+    {code:'SM',name:'San Marino',flag:'🇸🇲'},{code:'RS',name:'Serbia',flag:'🇷🇸'},{code:'SK',name:'Slovakia',flag:'🇸🇰'},
+    {code:'SI',name:'Slovenia',flag:'🇸🇮'},{code:'ES',name:'Spain',flag:'🇪🇸'},{code:'SE',name:'Sweden',flag:'🇸🇪'},
+    {code:'CH',name:'Switzerland',flag:'🇨🇭'},{code:'TR',name:'Turkey',flag:'🇹🇷'},{code:'UA',name:'Ukraine',flag:'🇺🇦'},
+    {code:'GB',name:'United Kingdom',flag:'🇬🇧'},{code:'VA',name:'Vatican City',flag:'🇻🇦'},
   ]},
-  { continent:'namerica', label:'🌎 North America', countries:[{code:'US',name:'USA',flag:'🇺🇸'},{code:'CA',name:'Canada',flag:'🇨🇦'},{code:'MX',name:'Mexico',flag:'🇲🇽'}]},
-  { continent:'samerica', label:'🌎 South America', countries:[{code:'BR',name:'Brazil',flag:'🇧🇷'},{code:'AR',name:'Argentina',flag:'🇦🇷'},{code:'CO',name:'Colombia',flag:'🇨🇴'},{code:'CL',name:'Chile',flag:'🇨🇱'}]},
-  { continent:'asia',     label:'🌏 Asia', countries:[{code:'JP',name:'Japan',flag:'🇯🇵'},{code:'KR',name:'South Korea',flag:'🇰🇷'},{code:'CN',name:'China',flag:'🇨🇳'},{code:'IN',name:'India',flag:'🇮🇳'},{code:'TH',name:'Thailand',flag:'🇹🇭'},{code:'ID',name:'Indonesia',flag:'🇮🇩'},{code:'SG',name:'Singapore',flag:'🇸🇬'},{code:'PH',name:'Philippines',flag:'🇵🇭'}]},
-  { continent:'africa',   label:'🌍 Africa', countries:[{code:'NG',name:'Nigeria',flag:'🇳🇬'},{code:'ZA',name:'South Africa',flag:'🇿🇦'},{code:'GH',name:'Ghana',flag:'🇬🇭'},{code:'KE',name:'Kenya',flag:'🇰🇪'},{code:'EG',name:'Egypt',flag:'🇪🇬'}]},
-  { continent:'oceania',  label:'🌏 Oceania', countries:[{code:'AU',name:'Australia',flag:'🇦🇺'},{code:'NZ',name:'New Zealand',flag:'🇳🇿'}]},
+  { continent:'namerica', label:'🌎 North America', countries:[
+    {code:'CA',name:'Canada',flag:'🇨🇦'},{code:'GL',name:'Greenland',flag:'🇬🇱'},{code:'MX',name:'Mexico',flag:'🇲🇽'},
+    {code:'US',name:'USA',flag:'🇺🇸'},
+  ]},
+  { continent:'caribbean', label:'🌴 Caribbean', countries:[
+    {code:'AG',name:'Antigua & Barbuda',flag:'🇦🇬'},{code:'BS',name:'Bahamas',flag:'🇧🇸'},{code:'BB',name:'Barbados',flag:'🇧🇧'},
+    {code:'CU',name:'Cuba',flag:'🇨🇺'},{code:'DM',name:'Dominica',flag:'🇩🇲'},{code:'DO',name:'Dominican Republic',flag:'🇩🇴'},
+    {code:'GD',name:'Grenada',flag:'🇬🇩'},{code:'HT',name:'Haiti',flag:'🇭🇹'},{code:'JM',name:'Jamaica',flag:'🇯🇲'},
+    {code:'KN',name:'Saint Kitts & Nevis',flag:'🇰🇳'},{code:'LC',name:'Saint Lucia',flag:'🇱🇨'},
+    {code:'VC',name:'Saint Vincent & Grenadines',flag:'🇻🇨'},{code:'TT',name:'Trinidad & Tobago',flag:'🇹🇹'},
+  ]},
+  { continent:'samerica', label:'🌎 South America', countries:[
+    {code:'AR',name:'Argentina',flag:'🇦🇷'},{code:'BO',name:'Bolivia',flag:'🇧🇴'},{code:'BR',name:'Brazil',flag:'🇧🇷'},
+    {code:'CL',name:'Chile',flag:'🇨🇱'},{code:'CO',name:'Colombia',flag:'🇨🇴'},{code:'EC',name:'Ecuador',flag:'🇪🇨'},
+    {code:'GY',name:'Guyana',flag:'🇬🇾'},{code:'PY',name:'Paraguay',flag:'🇵🇾'},{code:'PE',name:'Peru',flag:'🇵🇪'},
+    {code:'SR',name:'Suriname',flag:'🇸🇷'},{code:'UY',name:'Uruguay',flag:'🇺🇾'},{code:'VE',name:'Venezuela',flag:'🇻🇪'},
+  ]},
+  { continent:'namerica', label:'🌎 Central America', countries:[
+    {code:'BZ',name:'Belize',flag:'🇧🇿'},{code:'CR',name:'Costa Rica',flag:'🇨🇷'},{code:'SV',name:'El Salvador',flag:'🇸🇻'},
+    {code:'GT',name:'Guatemala',flag:'🇬🇹'},{code:'HN',name:'Honduras',flag:'🇭🇳'},{code:'NI',name:'Nicaragua',flag:'🇳🇮'},
+    {code:'PA',name:'Panama',flag:'🇵🇦'},
+  ]},
+  { continent:'africa', label:'🌍 Africa — North', countries:[
+    {code:'DZ',name:'Algeria',flag:'🇩🇿'},{code:'EG',name:'Egypt',flag:'🇪🇬'},{code:'LY',name:'Libya',flag:'🇱🇾'},
+    {code:'MA',name:'Morocco',flag:'🇲🇦'},{code:'SD',name:'Sudan',flag:'🇸🇩'},{code:'TN',name:'Tunisia',flag:'🇹🇳'},
+  ]},
+  { continent:'africa', label:'🌍 Africa — West', countries:[
+    {code:'BJ',name:'Benin',flag:'🇧🇯'},{code:'BF',name:'Burkina Faso',flag:'🇧🇫'},{code:'CV',name:'Cape Verde',flag:'🇨🇻'},
+    {code:'CI',name:'Côte d\'Ivoire',flag:'🇨🇮'},{code:'GM',name:'Gambia',flag:'🇬🇲'},{code:'GH',name:'Ghana',flag:'🇬🇭'},
+    {code:'GN',name:'Guinea',flag:'🇬🇳'},{code:'GW',name:'Guinea-Bissau',flag:'🇬🇼'},{code:'LR',name:'Liberia',flag:'🇱🇷'},
+    {code:'ML',name:'Mali',flag:'🇲🇱'},{code:'MR',name:'Mauritania',flag:'🇲🇷'},{code:'NE',name:'Niger',flag:'🇳🇪'},
+    {code:'NG',name:'Nigeria',flag:'🇳🇬'},{code:'SN',name:'Senegal',flag:'🇸🇳'},{code:'SL',name:'Sierra Leone',flag:'🇸🇱'},
+    {code:'TG',name:'Togo',flag:'🇹🇬'},
+  ]},
+  { continent:'africa', label:'🌍 Africa — East', countries:[
+    {code:'BI',name:'Burundi',flag:'🇧🇮'},{code:'KM',name:'Comoros',flag:'🇰🇲'},{code:'DJ',name:'Djibouti',flag:'🇩🇯'},
+    {code:'ER',name:'Eritrea',flag:'🇪🇷'},{code:'ET',name:'Ethiopia',flag:'🇪🇹'},{code:'KE',name:'Kenya',flag:'🇰🇪'},
+    {code:'MG',name:'Madagascar',flag:'🇲🇬'},{code:'MW',name:'Malawi',flag:'🇲🇼'},{code:'MU',name:'Mauritius',flag:'🇲🇺'},
+    {code:'MZ',name:'Mozambique',flag:'🇲🇿'},{code:'RW',name:'Rwanda',flag:'🇷🇼'},{code:'SC',name:'Seychelles',flag:'🇸🇨'},
+    {code:'SO',name:'Somalia',flag:'🇸🇴'},{code:'SS',name:'South Sudan',flag:'🇸🇸'},{code:'TZ',name:'Tanzania',flag:'🇹🇿'},
+    {code:'UG',name:'Uganda',flag:'🇺🇬'},{code:'ZM',name:'Zambia',flag:'🇿🇲'},{code:'ZW',name:'Zimbabwe',flag:'🇿🇼'},
+  ]},
+  { continent:'africa', label:'🌍 Africa — Central', countries:[
+    {code:'AO',name:'Angola',flag:'🇦🇴'},{code:'CM',name:'Cameroon',flag:'🇨🇲'},{code:'CF',name:'Central African Republic',flag:'🇨🇫'},
+    {code:'TD',name:'Chad',flag:'🇹🇩'},{code:'CG',name:'Congo',flag:'🇨🇬'},{code:'CD',name:'DR Congo',flag:'🇨🇩'},
+    {code:'GQ',name:'Equatorial Guinea',flag:'🇬🇶'},{code:'GA',name:'Gabon',flag:'🇬🇦'},{code:'ST',name:'São Tomé & Príncipe',flag:'🇸🇹'},
+  ]},
+  { continent:'africa', label:'🌍 Africa — South', countries:[
+    {code:'BW',name:'Botswana',flag:'🇧🇼'},{code:'LS',name:'Lesotho',flag:'🇱🇸'},{code:'NA',name:'Namibia',flag:'🇳🇦'},
+    {code:'ZA',name:'South Africa',flag:'🇿🇦'},{code:'SZ',name:'Eswatini',flag:'🇸🇿'},
+  ]},
+  { continent:'mideast', label:'🕌 Middle East', countries:[
+    {code:'BH',name:'Bahrain',flag:'🇧🇭'},{code:'IR',name:'Iran',flag:'🇮🇷'},{code:'IQ',name:'Iraq',flag:'🇮🇶'},
+    {code:'IL',name:'Israel',flag:'🇮🇱'},{code:'JO',name:'Jordan',flag:'🇯🇴'},{code:'KW',name:'Kuwait',flag:'🇰🇼'},
+    {code:'LB',name:'Lebanon',flag:'🇱🇧'},{code:'OM',name:'Oman',flag:'🇴🇲'},{code:'PS',name:'Palestine',flag:'🇵🇸'},
+    {code:'QA',name:'Qatar',flag:'🇶🇦'},{code:'SA',name:'Saudi Arabia',flag:'🇸🇦'},{code:'SY',name:'Syria',flag:'🇸🇾'},
+    {code:'AE',name:'United Arab Emirates',flag:'🇦🇪'},{code:'YE',name:'Yemen',flag:'🇾🇪'},
+  ]},
+  { continent:'caucasus', label:'🏔 Caucasus & Central Asia', countries:[
+    {code:'AM',name:'Armenia',flag:'🇦🇲'},{code:'AZ',name:'Azerbaijan',flag:'🇦🇿'},{code:'GE',name:'Georgia',flag:'🇬🇪'},
+    {code:'KZ',name:'Kazakhstan',flag:'🇰🇿'},{code:'KG',name:'Kyrgyzstan',flag:'🇰🇬'},{code:'TJ',name:'Tajikistan',flag:'🇹🇯'},
+    {code:'TM',name:'Turkmenistan',flag:'🇹🇲'},{code:'UZ',name:'Uzbekistan',flag:'🇺🇿'},
+  ]},
+  { continent:'asia', label:'🌏 Asia — East', countries:[
+    {code:'CN',name:'China',flag:'🇨🇳'},{code:'HK',name:'Hong Kong',flag:'🇭🇰'},{code:'JP',name:'Japan',flag:'🇯🇵'},
+    {code:'MO',name:'Macau',flag:'🇲🇴'},{code:'MN',name:'Mongolia',flag:'🇲🇳'},{code:'KP',name:'North Korea',flag:'🇰🇵'},
+    {code:'KR',name:'South Korea',flag:'🇰🇷'},{code:'TW',name:'Taiwan',flag:'🇹🇼'},
+  ]},
+  { continent:'asia', label:'🌏 Asia — South', countries:[
+    {code:'AF',name:'Afghanistan',flag:'🇦🇫'},{code:'BD',name:'Bangladesh',flag:'🇧🇩'},{code:'BT',name:'Bhutan',flag:'🇧🇹'},
+    {code:'IN',name:'India',flag:'🇮🇳'},{code:'MV',name:'Maldives',flag:'🇲🇻'},{code:'NP',name:'Nepal',flag:'🇳🇵'},
+    {code:'PK',name:'Pakistan',flag:'🇵🇰'},{code:'LK',name:'Sri Lanka',flag:'🇱🇰'},
+  ]},
+  { continent:'asia', label:'🌏 Asia — Southeast', countries:[
+    {code:'BN',name:'Brunei',flag:'🇧🇳'},{code:'KH',name:'Cambodia',flag:'🇰🇭'},{code:'TL',name:'East Timor',flag:'🇹🇱'},
+    {code:'ID',name:'Indonesia',flag:'🇮🇩'},{code:'LA',name:'Laos',flag:'🇱🇦'},{code:'MY',name:'Malaysia',flag:'🇲🇾'},
+    {code:'MM',name:'Myanmar',flag:'🇲🇲'},{code:'PH',name:'Philippines',flag:'🇵🇭'},{code:'SG',name:'Singapore',flag:'🇸🇬'},
+    {code:'TH',name:'Thailand',flag:'🇹🇭'},{code:'VN',name:'Vietnam',flag:'🇻🇳'},
+  ]},
+  { continent:'oceania', label:'🌊 Oceania', countries:[
+    {code:'AU',name:'Australia',flag:'🇦🇺'},{code:'FJ',name:'Fiji',flag:'🇫🇯'},{code:'KI',name:'Kiribati',flag:'🇰🇮'},
+    {code:'MH',name:'Marshall Islands',flag:'🇲🇭'},{code:'FM',name:'Micronesia',flag:'🇫🇲'},{code:'NR',name:'Nauru',flag:'🇳🇷'},
+    {code:'NZ',name:'New Zealand',flag:'🇳🇿'},{code:'PW',name:'Palau',flag:'🇵🇼'},{code:'PG',name:'Papua New Guinea',flag:'🇵🇬'},
+    {code:'WS',name:'Samoa',flag:'🇼🇸'},{code:'SB',name:'Solomon Islands',flag:'🇸🇧'},{code:'TO',name:'Tonga',flag:'🇹🇴'},
+    {code:'TV',name:'Tuvalu',flag:'🇹🇻'},{code:'VU',name:'Vanuatu',flag:'🇻🇺'},
+  ]},
 ]
 
 const selectedContinent = computed(() => {

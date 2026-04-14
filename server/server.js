@@ -200,7 +200,47 @@ app.get('/api/songs/all', async (req, res) => {
 })
 
 // Country → Continent lookup
-const countryToContinent = { DE:'europe',AT:'europe',CH:'europe',FR:'europe',GB:'europe',IT:'europe',ES:'europe',NL:'europe',BE:'europe',PL:'europe',SE:'europe',NO:'europe',DK:'europe',FI:'europe',PT:'europe',GR:'europe',RU:'europe',UA:'europe',TR:'europe',US:'namerica',CA:'namerica',MX:'namerica',BR:'samerica',AR:'samerica',CO:'samerica',CL:'samerica',JP:'asia',KR:'asia',CN:'asia',IN:'asia',TH:'asia',ID:'asia',SG:'asia',PH:'asia',NG:'africa',ZA:'africa',GH:'africa',KE:'africa',EG:'africa',AU:'oceania',NZ:'oceania' }
+const countryToContinent = {
+  // Europe
+  AL:'europe',AD:'europe',AT:'europe',BY:'europe',BE:'europe',BA:'europe',BG:'europe',HR:'europe',
+  CY:'europe',CZ:'europe',DK:'europe',EE:'europe',FI:'europe',FR:'europe',DE:'europe',GR:'europe',
+  HU:'europe',IS:'europe',IE:'europe',IT:'europe',XK:'europe',LV:'europe',LI:'europe',LT:'europe',
+  LU:'europe',MT:'europe',MD:'europe',MC:'europe',ME:'europe',NL:'europe',MK:'europe',NO:'europe',
+  PL:'europe',PT:'europe',RO:'europe',RU:'europe',SM:'europe',RS:'europe',SK:'europe',SI:'europe',
+  ES:'europe',SE:'europe',CH:'europe',TR:'europe',UA:'europe',GB:'europe',VA:'europe',
+  // North America
+  CA:'namerica',GL:'namerica',MX:'namerica',US:'namerica',
+  BZ:'namerica',CR:'namerica',SV:'namerica',GT:'namerica',HN:'namerica',NI:'namerica',PA:'namerica',
+  // Caribbean
+  AG:'samerica',BS:'samerica',BB:'samerica',CU:'samerica',DM:'samerica',DO:'samerica',
+  GD:'samerica',HT:'samerica',JM:'samerica',KN:'samerica',LC:'samerica',VC:'samerica',TT:'samerica',
+  // South America
+  AR:'samerica',BO:'samerica',BR:'samerica',CL:'samerica',CO:'samerica',EC:'samerica',
+  GY:'samerica',PY:'samerica',PE:'samerica',SR:'samerica',UY:'samerica',VE:'samerica',
+  // Africa
+  DZ:'africa',EG:'africa',LY:'africa',MA:'africa',SD:'africa',TN:'africa',
+  BJ:'africa',BF:'africa',CV:'africa',CI:'africa',GM:'africa',GH:'africa',GN:'africa',GW:'africa',
+  LR:'africa',ML:'africa',MR:'africa',NE:'africa',NG:'africa',SN:'africa',SL:'africa',TG:'africa',
+  BI:'africa',KM:'africa',DJ:'africa',ER:'africa',ET:'africa',KE:'africa',MG:'africa',MW:'africa',
+  MU:'africa',MZ:'africa',RW:'africa',SC:'africa',SO:'africa',SS:'africa',TZ:'africa',UG:'africa',
+  ZM:'africa',ZW:'africa',AO:'africa',CM:'africa',CF:'africa',TD:'africa',CG:'africa',CD:'africa',
+  GQ:'africa',GA:'africa',ST:'africa',BW:'africa',LS:'africa',NA:'africa',ZA:'africa',SZ:'africa',
+  // Middle East
+  BH:'asia',IR:'asia',IQ:'asia',IL:'asia',JO:'asia',KW:'asia',LB:'asia',OM:'asia',
+  PS:'asia',QA:'asia',SA:'asia',SY:'asia',AE:'asia',YE:'asia',
+  // Caucasus & Central Asia
+  AM:'asia',AZ:'asia',GE:'asia',KZ:'asia',KG:'asia',TJ:'asia',TM:'asia',UZ:'asia',
+  // Asia East
+  CN:'asia',HK:'asia',JP:'asia',MO:'asia',MN:'asia',KP:'asia',KR:'asia',TW:'asia',
+  // Asia South
+  AF:'asia',BD:'asia',BT:'asia',IN:'asia',MV:'asia',NP:'asia',PK:'asia',LK:'asia',
+  // Asia Southeast
+  BN:'asia',KH:'asia',TL:'asia',ID:'asia',LA:'asia',MY:'asia',MM:'asia',PH:'asia',
+  SG:'asia',TH:'asia',VN:'asia',
+  // Oceania
+  AU:'oceania',FJ:'oceania',KI:'oceania',MH:'oceania',FM:'oceania',NR:'oceania',NZ:'oceania',
+  PW:'oceania',PG:'oceania',WS:'oceania',SB:'oceania',TO:'oceania',TV:'oceania',VU:'oceania',
+}
 
 app.get('/api/songs/radio', async (req, res) => {
   const { continent, country } = req.query
