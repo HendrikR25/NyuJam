@@ -1790,10 +1790,14 @@ async function updateContinentLikePct(songId, continent, weekStart) {
 }
 
 app.get('/api/radio/continent/:code/rankings', async (req, res) => {
-  const continent = req.params.code.toLowerCase()
+  const continent  = req.params.code.toLowerCase()
+  const weekStart  = getUtcWeekStart()
+  // Only show completed weeks (not current week which is still in progress)
   const { data } = await sb.from('radio_rankings_continent').select('*')
-    .eq('continent', continent).order('week_start', { ascending: false }).order('like_pct', { ascending: false })
-  // Group by week
+    .eq('continent', continent)
+    .lt('week_start', weekStart)  // strictly less than current week
+    .order('week_start', { ascending: false })
+    .order('like_pct',   { ascending: false })
   const weeks = {}
   for (const r of data || []) {
     if (!weeks[r.week_start]) weeks[r.week_start] = []
@@ -1902,8 +1906,11 @@ async function updateGlobalLikePct(songId, weekStart) {
 }
 
 app.get('/api/radio/global/rankings', async (req, res) => {
+  const weekStart = getUtcWeekStart()
   const { data } = await sb.from('radio_rankings_global').select('*')
-    .order('week_start', { ascending: false }).order('like_pct', { ascending: false })
+    .lt('week_start', weekStart)  // only completed weeks
+    .order('week_start', { ascending: false })
+    .order('like_pct',   { ascending: false })
   const weeks = {}
   for (const r of data || []) {
     if (!weeks[r.week_start]) weeks[r.week_start] = []

@@ -95,12 +95,13 @@
 
       <!-- GLOBAL RADIO (no continent selected) -->
       <div class="now-playing-card" key="global" v-if="!activeContinent" :style="{ '--accent': '#f0c832' }">
-        <div class="npc-cover" :style="{ background: 'rgba(240,200,50,0.08)', borderColor: 'rgba(240,200,50,0.2)' }">
+        <div class="npc-cover npc-cover--clickable" :style="{ background: 'rgba(240,200,50,0.08)', borderColor: 'rgba(240,200,50,0.2)' }" @click="globalRadio.current && playCurrentSong(globalRadio.current)">
           <img v-if="globalRadio.current?.cover" :src="globalRadio.current.cover" class="npc-cover-img" />
           <span v-else class="npc-icon">✦</span>
           <span class="npc-wave" v-if="radioAudio && globalRadio.current"><span></span><span></span><span></span><span></span></span>
+          <span class="npc-play-hint" v-if="globalRadio.current">▶</span>
         </div>
-        <div class="npc-info">
+        <div class="npc-info" :class="{ 'npc-info--clickable': globalRadio.current }" @click="globalRadio.current && playCurrentSong(globalRadio.current)">
           <span class="npc-station">NyuJam Global Radio</span>
           <span class="npc-song">{{ globalRadio.current?.name || (globalRadio.loading ? 'Lädt...' : 'Klicke auf einen Kontinent') }}</span>
           <span class="npc-artist">{{ globalRadio.current?.artist || 'für das Kontinent-Radio' }}</span>
@@ -141,12 +142,13 @@
 
       <!-- CONTINENT RADIO (continent selected, no country) -->
       <div class="now-playing-card" key="continent" v-else-if="activeContinent && !activeCountry" :style="{ '--accent': '#32c8a0' }">
-        <div class="npc-cover" :style="{ background: 'rgba(50,200,160,0.1)', borderColor: 'rgba(50,200,160,0.3)' }">
+        <div class="npc-cover npc-cover--clickable" :style="{ background: 'rgba(50,200,160,0.1)', borderColor: 'rgba(50,200,160,0.3)' }" @click="continentRadio.current && playCurrentSong(continentRadio.current)">
           <img v-if="continentRadio.current?.cover" :src="continentRadio.current.cover" class="npc-cover-img" />
           <span v-else class="npc-icon">📻</span>
           <span class="npc-wave" v-if="radioAudio && continentRadio.current"><span></span><span></span><span></span><span></span></span>
+          <span class="npc-play-hint" v-if="continentRadio.current">▶</span>
         </div>
-        <div class="npc-info">
+        <div class="npc-info" :class="{ 'npc-info--clickable': continentRadio.current }" @click="continentRadio.current && playCurrentSong(continentRadio.current)">
           <span class="npc-station">{{ activeContinent.name }} Radio</span>
           <span class="npc-song">{{ continentRadio.current?.name || (continentRadio.loading ? 'Lädt...' : 'Klicke auf ein Land') }}</span>
           <span class="npc-artist">{{ continentRadio.current?.artist || 'für das Länder-Radio' }}</span>
@@ -220,12 +222,13 @@
 
       <!-- COUNTRY ON-AIR -->
       <div class="now-playing-card" key="onair" v-else :style="{ '--accent': '#5b6aff' }">
-        <div class="npc-cover" :style="{ background: 'rgba(91,106,255,0.1)', borderColor: 'rgba(91,106,255,0.3)' }">
+        <div class="npc-cover npc-cover--clickable" :style="{ background: 'rgba(91,106,255,0.1)', borderColor: 'rgba(91,106,255,0.3)' }" @click="countryRadio.currentSong && playCurrentSong(countryRadio.currentSong)">
           <img v-if="countryRadio.currentSong?.cover" :src="countryRadio.currentSong.cover" class="npc-cover-img" />
           <span v-else class="npc-icon">📻</span>
           <span class="npc-wave" v-if="radioAudio"><span></span><span></span><span></span><span></span></span>
+          <span class="npc-play-hint" v-if="countryRadio.currentSong">▶</span>
         </div>
-        <div class="npc-info">
+        <div class="npc-info" :class="{ 'npc-info--clickable': countryRadio.currentSong }" @click="countryRadio.currentSong && playCurrentSong(countryRadio.currentSong)">
           <span class="npc-station">{{ activeCountry.name }} Radio</span>
           <span class="npc-song">{{ countryRadio.currentSong?.name || 'Lädt...' }}</span>
           <span class="npc-artist">{{ countryRadio.currentSong?.artist || '—' }}</span>
@@ -603,6 +606,11 @@ function playRankSong(r) {
   }).catch(() => {})
 }
 
+function playCurrentSong(song) {
+  // song has { id: 'u_xxx', name, artist, cover, url }
+  player.play({ id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url })
+}
+
 // ── Rankings helpers ───────────────────────────────────
 function toggleHistWeek(type, week) {
   histOpen.value[type] = histOpen.value[type] === week ? null : week
@@ -751,6 +759,11 @@ onUnmounted(() => {
 .now-playing-card { position: relative; z-index: 1; width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 0; background: rgba(240,237,230,0.04); border: 1px solid rgba(240,237,230,0.1); border-left: 3px solid var(--accent); border-radius: 6px; padding: 1rem 1.1rem; }
 .npc-top { display: flex; align-items: center; gap: 1rem; }
 .npc-cover { width: 46px; height: 46px; flex-shrink: 0; border-radius: 6px; border: 1px solid; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+.npc-cover--clickable { cursor: pointer; }
+.npc-cover--clickable:hover .npc-play-hint { opacity: 1; }
+.npc-play-hint { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); color: #fff; font-size: 1rem; opacity: 0; transition: opacity 0.2s; border-radius: inherit; }
+.npc-info--clickable { cursor: pointer; }
+.npc-info--clickable:hover .npc-song { text-decoration: underline; opacity: 0.85; }
 .npc-cover-img { width: 100%; height: 100%; object-fit: cover; }
 .npc-icon { font-size: 1.4rem; }
 .npc-wave { position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 2px; }
