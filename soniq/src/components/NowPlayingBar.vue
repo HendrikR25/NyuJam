@@ -3,7 +3,7 @@
     <button
       v-if="player.currentSong && !isHidden"
       class="now-playing-bar"
-      @click="router.push('/player')"
+    @click="openPlayer"
     >
       <div class="npb-cover" v-if="player.currentSong?.cover">
         <img :src="player.currentSong.cover" class="npb-cover-img" />
@@ -31,6 +31,11 @@ const route  = useRoute()
 const player = usePlayerStore()
 
 const isHidden = computed(() => false)
+
+function openPlayer() {
+  player.fromRoute = route.fullPath
+  router.push('/player')
+}
 </script>
 
 <style scoped>

@@ -100,8 +100,10 @@ export const usePlayerStore = defineStore('player', () => {
 
   // Play a radio song synced to the exact position it's at in the radio
   function playRadioSynced(song, startedAt) {
-    const audio       = getAudio()
-    const elapsed     = startedAt ? (Date.now() - new Date(startedAt).getTime()) / 1000 : 0
+    const audio   = getAudio()
+    // Calculate elapsed at call time — do this BEFORE async operations
+    const elapsed = startedAt ? Math.max(0, (Date.now() - new Date(startedAt).getTime()) / 1000) : 0
+
     currentSong.value = song
     isPlaying.value   = false
     isLoading.value   = true
@@ -109,27 +111,28 @@ export const usePlayerStore = defineStore('player', () => {
     currentTime.value = 0
     duration.value    = 0
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
-    audio.src         = song.url
-    audio.load()
 
-    const tryPlay = () => {
-      // Set currentTime after canplay — browser can seek now
-      if (elapsed > 0) {
+    audio.src = song.url
+
+    // Use loadedmetadata for reliable seeking — fires when duration is known
+    audio.addEventListener('loadedmetadata', () => {
+      if (elapsed > 0 && elapsed < audio.duration) {
         audio.currentTime = elapsed
-        // Wait for seeked event before playing to avoid starting at 0
-        audio.addEventListener('seeked', () => {
-          audio.play()
-            .then(() => { isPlaying.value = true; isLoading.value = false })
-            .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
-        }, { once: true })
-      } else {
-        audio.play()
-          .then(() => { isPlaying.value = true; isLoading.value = false })
-          .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
       }
-    }
-    audio.addEventListener('canplay', tryPlay, { once: true })
-    setTimeout(() => { if (isLoading.value) tryPlay() }, 3000)
+    }, { once: true })
+
+    audio.addEventListener('canplay', () => {
+      // Re-confirm seek position in case loadedmetadata ran first
+      if (elapsed > 0 && Math.abs(audio.currentTime - elapsed) > 2) {
+        audio.currentTime = elapsed
+      }
+      audio.play()
+        .then(() => { isPlaying.value = true; isLoading.value = false })
+        .catch(() => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+    }, { once: true })
+
+    audio.load()
+    setTimeout(() => { if (isLoading.value) { audio.play().catch(() => {}) } }, 4000)
   }
 
   function togglePlay() {
