@@ -31,11 +31,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (!_audio) {
       _audio = new Audio()
       _audio.volume = volume.value
-      _audio.addEventListener('timeupdate',      () => { currentTime.value = _audio.currentTime })
-      _audio.addEventListener('loadedmetadata',  () => { duration.value    = _audio.duration })
-      _audio.addEventListener('canplay',         () => { isLoading.value   = false })
-      _audio.addEventListener('ended',           () => { isPlaying.value   = false; next() })
-      _audio.addEventListener('error',           () => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
+      _audio.addEventListener('timeupdate',     () => { currentTime.value = _audio.currentTime })
+      _audio.addEventListener('loadedmetadata', () => { duration.value    = _audio.duration })
+      _audio.addEventListener('canplay',        () => { isLoading.value   = false })
+      _audio.addEventListener('ended',          () => { isPlaying.value   = false; next() })
+      _audio.onerror = () => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false }
     }
     return _audio
   }
@@ -98,32 +98,30 @@ export const usePlayerStore = defineStore('player', () => {
     setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
-  // Adopt an already-playing radio audio element into the player
-  // No new loading — the song just continues playing, player UI reflects it
+  // Mirror a radio song in the player UI without touching audio playback
+  // The radio audio keeps running — player just shows what's playing
   function adoptRadioAudio(externalAudio, song) {
-    // Stop any current player audio if it's a different element
-    if (_audio && _audio !== externalAudio) {
-      _audio.pause()
-      _audio.src = ''
-      _audio = null
-    }
-
-    // Take over the external audio element
-    _audio = externalAudio
-
-    // Sync player state from the live audio — no play() call needed
+    // Update state so player UI shows the right song
     currentSong.value = song
     isPlaying.value   = !externalAudio.paused
     isLoading.value   = false
     error.value       = null
-    currentTime.value = externalAudio.currentTime
     duration.value    = externalAudio.duration || 0
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
 
-    // Attach timeupdate so the scrubber works — use named fn to avoid dupes
-    externalAudio.ontimeupdate    = () => { currentTime.value = externalAudio.currentTime }
-    externalAudio.ondurationchange = () => { duration.value   = externalAudio.duration }
-    // Don't override onended — RadioView already handles next-song logic
+    // Keep currentTime in sync via polling the external audio
+    currentTime.value = externalAudio.currentTime
+    externalAudio.ontimeupdate     = () => { currentTime.value = externalAudio.currentTime }
+    externalAudio.ondurationchange = () => { duration.value    = externalAudio.duration }
+
+    // Point internal _audio at the external element so seek/togglePlay work
+    if (_audio && _audio !== externalAudio) {
+      _audio.onerror = null  // prevent "Wiedergabe fehlgeschlagen" when we clear src
+      _audio.pause()
+      _audio.src = ''
+    }
+    _audio = externalAudio
+    _audio.onerror = null  // radio audio errors are handled by RadioView
   }
 
   // Keep for backwards compat but simplified — no longer used for radio
