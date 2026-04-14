@@ -95,13 +95,13 @@
 
       <!-- GLOBAL RADIO (no continent selected) -->
       <div class="now-playing-card" key="global" v-if="!activeContinent" :style="{ '--accent': '#f0c832' }">
-        <div class="npc-cover npc-cover--clickable" :style="{ background: 'rgba(240,200,50,0.08)', borderColor: 'rgba(240,200,50,0.2)' }" @click="globalRadio.current && playCurrentSong(globalRadio.current)">
+        <div class="npc-cover npc-cover--clickable" :style="{ background: 'rgba(240,200,50,0.08)', borderColor: 'rgba(240,200,50,0.2)' }" @click="globalRadio.current && playCurrentSong(globalRadio.current, globalRadio.startedAt)">
           <img v-if="globalRadio.current?.cover" :src="globalRadio.current.cover" class="npc-cover-img" />
           <span v-else class="npc-icon">✦</span>
           <span class="npc-wave" v-if="radioAudio && globalRadio.current"><span></span><span></span><span></span><span></span></span>
           <span class="npc-play-hint" v-if="globalRadio.current">▶</span>
         </div>
-        <div class="npc-info" :class="{ 'npc-info--clickable': globalRadio.current }" @click="globalRadio.current && playCurrentSong(globalRadio.current)">
+        <div class="npc-info" :class="{ 'npc-info--clickable': globalRadio.current }" @click="globalRadio.current && playCurrentSong(globalRadio.current, globalRadio.startedAt)">
           <span class="npc-station">NyuJam Global Radio</span>
           <span class="npc-song">{{ globalRadio.current?.name || (globalRadio.loading ? 'Lädt...' : 'Klicke auf einen Kontinent') }}</span>
           <span class="npc-artist">{{ globalRadio.current?.artist || 'für das Kontinent-Radio' }}</span>
@@ -606,10 +606,53 @@ function playRankSong(r) {
   }).catch(() => {})
 }
 
-function playCurrentSong(song) {
-  // song has { id: 'u_xxx', name, artist, cover, url }
-  player.play({ id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url })
+// Open radio song in player at the exact position it's playing
+function playCurrentSong(song, startedAt) {
+  player.playRadioSynced(
+    { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url },
+    startedAt
+  )
+  // Mark that player is following radio so it auto-updates on song change
+  radioFollowing.value = true
 }
+
+// Track whether player is following radio
+const radioFollowing = ref(false)
+
+// When radio advances, if player is following → sync new song automatically
+watch(() => globalRadio.value.current?.id, (newId) => {
+  if (radioFollowing.value && newId && !activeContinent.value) {
+    player.playRadioSynced(
+      { id: globalRadio.value.current.id, name: globalRadio.value.current.name, artist: globalRadio.value.current.artist, cover: globalRadio.value.current.cover, url: globalRadio.value.current.url },
+      globalRadio.value.startedAt
+    )
+  }
+})
+watch(() => continentRadio.value.current?.id, (newId) => {
+  if (radioFollowing.value && newId && activeContinent.value && !activeCountry.value) {
+    player.playRadioSynced(
+      { id: continentRadio.value.current.id, name: continentRadio.value.current.name, artist: continentRadio.value.current.artist, cover: continentRadio.value.current.cover, url: continentRadio.value.current.url },
+      continentRadio.value.startedAt
+    )
+  }
+})
+watch(() => countryRadio.value.currentSong?.id, (newId) => {
+  if (radioFollowing.value && newId && activeCountry.value) {
+    player.playRadioSynced(
+      { id: countryRadio.value.currentSong.id, name: countryRadio.value.currentSong.name, artist: countryRadio.value.currentSong.artist, cover: countryRadio.value.currentSong.cover, url: countryRadio.value.currentSong.url },
+      countryRadio.value.songStartedAt
+    )
+  }
+})
+// Stop following when user manually plays something else
+watch(() => player.currentSong?.id, (newId) => {
+  if (radioFollowing.value) {
+    const radioId = activeCountry.value ? countryRadio.value.currentSong?.id
+      : activeContinent.value ? continentRadio.value.current?.id
+      : globalRadio.value.current?.id
+    if (newId !== radioId) radioFollowing.value = false
+  }
+})
 
 // ── Rankings helpers ───────────────────────────────────
 function toggleHistWeek(type, week) {

@@ -98,6 +98,34 @@ export const usePlayerStore = defineStore('player', () => {
     setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
+  // Play a radio song synced to the exact position it's at in the radio
+  function playRadioSynced(song, startedAt) {
+    const audio       = getAudio()
+    const elapsed     = startedAt ? (Date.now() - new Date(startedAt).getTime()) / 1000 : 0
+    currentSong.value = song
+    isPlaying.value   = false
+    isLoading.value   = true
+    error.value       = null
+    currentTime.value = 0
+    duration.value    = 0
+    isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
+    audio.src         = song.url
+    audio.load()
+
+    const tryPlay = () => {
+      audio.currentTime = Math.max(0, elapsed)
+      audio.play()
+        .then(() => { isPlaying.value = true; isLoading.value = false })
+        .catch(e => {
+          error.value     = 'Wiedergabe fehlgeschlagen.'
+          isPlaying.value = false
+          isLoading.value = false
+        })
+    }
+    audio.addEventListener('canplay', tryPlay, { once: true })
+    setTimeout(() => { if (isLoading.value) tryPlay() }, 3000)
+  }
+
   function togglePlay() {
     const audio = getAudio()
     if (!currentSong.value) { if (songs.value.length) play(songs.value[0]); return }
@@ -194,7 +222,7 @@ export const usePlayerStore = defineStore('player', () => {
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
     loadSongs, loadFavorites, play, togglePlay,
-    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong,
+    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced,
     // expose audio element for seek
     get audioEl() { return getAudio() },
   }
