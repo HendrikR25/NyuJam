@@ -30,7 +30,7 @@ const router = useRouter()
 const route  = useRoute()
 const player = usePlayerStore()
 
-const isHidden = computed(() => false)
+const isHidden = computed(() => route.path === '/radio')
 
 function openPlayer() {
   player.fromRoute = route.fullPath
