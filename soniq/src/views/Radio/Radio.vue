@@ -612,9 +612,9 @@ function playCurrentSong(song) {
   player.adoptRadioAudio(radioAudio, {
     id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url
   })
-  // When radio audio ends, advance radio as normal
-  // (onended is already set in playStreamSong/startSyncedPlay)
   radioFollowing.value = true
+  player.fromRoute = '/radio'
+  router.push('/player')
 }
 
 // Track whether player is following radio
