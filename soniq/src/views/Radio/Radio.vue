@@ -620,7 +620,7 @@ function playCurrentSong(song) {
 // Track whether player is following radio
 const radioFollowing = ref(false)
 
-// When radio advances, if player is following → sync new song automatically
+// When radio advances, if player is following → update mirror
 watch(() => globalRadio.value.current?.id, (newId) => {
   if (radioFollowing.value && newId && !activeContinent.value && radioAudio) {
     player.adoptRadioAudio(radioAudio, { id: globalRadio.value.current.id, name: globalRadio.value.current.name, artist: globalRadio.value.current.artist, cover: globalRadio.value.current.cover, url: globalRadio.value.current.url })
@@ -636,13 +636,16 @@ watch(() => countryRadio.value.currentSong?.id, (newId) => {
     player.adoptRadioAudio(radioAudio, { id: countryRadio.value.currentSong.id, name: countryRadio.value.currentSong.name, artist: countryRadio.value.currentSong.artist, cover: countryRadio.value.currentSong.cover, url: countryRadio.value.currentSong.url })
   }
 })
-// Stop following when user manually plays something else
+// Stop mirror when user navigates away from radio or plays something else
 watch(() => player.currentSong?.id, (newId) => {
   if (radioFollowing.value) {
     const radioId = activeCountry.value ? countryRadio.value.currentSong?.id
       : activeContinent.value ? continentRadio.value.current?.id
       : globalRadio.value.current?.id
-    if (newId !== radioId) radioFollowing.value = false
+    if (newId !== radioId) {
+      radioFollowing.value = false
+      player.stopRadioMirror()
+    }
   }
 })
 
@@ -739,6 +742,7 @@ onMounted(async () => {
 onUnmounted(() => {
   stopRadioAudio()
   clearInterval(radioTimer)
+  player.stopRadioMirror()
 })
 </script>
 

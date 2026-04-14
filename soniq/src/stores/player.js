@@ -98,30 +98,34 @@ export const usePlayerStore = defineStore('player', () => {
     setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
   }
 
-  // Mirror a radio song in the player UI without touching audio playback
-  // The radio audio keeps running — player just shows what's playing
+  // Mirror a playing radio song in the player UI
+  // Does NOT touch internal _audio — radio keeps playing independently
+  // Player just shows the song info and syncs currentTime via interval
+  let _radioMirrorInterval = null
   function adoptRadioAudio(externalAudio, song) {
-    // Update state so player UI shows the right song
+    // Clear any previous mirror interval
+    if (_radioMirrorInterval) { clearInterval(_radioMirrorInterval); _radioMirrorInterval = null }
+
+    // Set state so PlayerView renders the song
     currentSong.value = song
-    isPlaying.value   = !externalAudio.paused
+    isPlaying.value   = true
     isLoading.value   = false
     error.value       = null
+    currentTime.value = externalAudio.currentTime
     duration.value    = externalAudio.duration || 0
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
 
-    // Keep currentTime in sync via polling the external audio
-    currentTime.value = externalAudio.currentTime
-    externalAudio.ontimeupdate     = () => { currentTime.value = externalAudio.currentTime }
-    externalAudio.ondurationchange = () => { duration.value    = externalAudio.duration }
+    // Sync currentTime every 250ms from the live radio audio
+    _radioMirrorInterval = setInterval(() => {
+      if (!externalAudio) { clearInterval(_radioMirrorInterval); return }
+      currentTime.value = externalAudio.currentTime
+      duration.value    = externalAudio.duration || 0
+      isPlaying.value   = !externalAudio.paused
+    }, 250)
+  }
 
-    // Point internal _audio at the external element so seek/togglePlay work
-    if (_audio && _audio !== externalAudio) {
-      _audio.onerror = null  // prevent "Wiedergabe fehlgeschlagen" when we clear src
-      _audio.pause()
-      _audio.src = ''
-    }
-    _audio = externalAudio
-    _audio.onerror = null  // radio audio errors are handled by RadioView
+  function stopRadioMirror() {
+    if (_radioMirrorInterval) { clearInterval(_radioMirrorInterval); _radioMirrorInterval = null }
   }
 
   // Keep for backwards compat but simplified — no longer used for radio
@@ -225,7 +229,7 @@ export const usePlayerStore = defineStore('player', () => {
     progressPct, currentIndex, hasNext, hasPrev,
     // actions
     loadSongs, loadFavorites, play, togglePlay,
-    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced, adoptRadioAudio,
+    seek, seekByPct, next, prev, setVolume, toggleLike, formatTime, deleteSong, play, playRadioSynced, adoptRadioAudio, stopRadioMirror,
     // expose audio element for seek
     get audioEl() { return getAudio() },
   }
