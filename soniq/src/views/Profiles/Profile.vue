@@ -226,8 +226,8 @@
 
       <!-- Stripe Connect — Künstler-Spenden -->
       <div class="profile-form" style="margin-top:0.5rem">
-        <div class="section-title">💸 Spenden von Fans empfangen</div>
-        <p class="connect-desc">Verknüpfe dein Stripe-Konto, damit Fans dir direkt Geld schicken können. 100% des Betrags landet bei dir — NyuJam behält nichts.</p>
+        <div class="section-title">💸 Tips von Fans empfangen</div>
+        <p class="connect-desc">Verknüpfe dein Stripe-Konto, damit Fans dir direkt Tips schicken können. 100% des Betrags landet bei dir — NyuJam behält nichts.</p>
         <div class="connect-status" :class="connectEnabled ? 'connect-status--on' : 'connect-status--off'">
           <span class="cs-dot"></span>
           {{ connectEnabled ? '✓ Zahlungen aktiviert' : 'Noch nicht aktiviert' }}
@@ -248,6 +248,28 @@
 
       <!-- Logout -->
       <button class="logout-btn" @click="auth.logout()">Abmelden</button>
+
+      <!-- Delete Account -->
+      <div class="profile-form danger-zone" style="margin-top:1.5rem">
+        <div class="section-title danger-title">⚠ Konto löschen</div>
+        <p class="danger-desc">Dein Konto und alle zugehörigen Daten werden unwiderruflich gelöscht — Uploads, Playlists, Kommentare, Nachrichten und mehr. Diese Aktion kann nicht rückgängig gemacht werden.</p>
+        <template v-if="!showDeleteConfirm">
+          <button class="delete-account-btn" @click="showDeleteConfirm = true">Konto unwiderruflich löschen</button>
+        </template>
+        <template v-else>
+          <div class="field">
+            <label class="field-label">Passwort zur Bestätigung</label>
+            <input v-model="deletePassword" class="field-input" type="password" placeholder="••••••••" />
+          </div>
+          <div class="form-error" v-if="deleteError">⚠ {{ deleteError }}</div>
+          <div class="delete-confirm-btns">
+            <button class="delete-account-btn" @click="deleteAccount" :disabled="deletingAccount">
+              {{ deletingAccount ? 'Wird gelöscht...' : 'Ja, Konto endgültig löschen' }}
+            </button>
+            <button class="cancel-delete-btn" @click="showDeleteConfirm = false; deletePassword = ''; deleteError = ''">Abbrechen</button>
+          </div>
+        </template>
+      </div>
 
       <!-- ── My Uploads ── -->
       <div class="uploads-section" v-if="myUploads.songs.length || myUploads.albums.length">
@@ -573,7 +595,29 @@ async function changePassword() {
   finally { changingPw.value = false }
 }
 
-// ── Stripe Connect ─────────────────────────────────────
+// ── Delete Account ─────────────────────────────────────
+const showDeleteConfirm = ref(false)
+const deletePassword    = ref('')
+const deleteError       = ref('')
+const deletingAccount   = ref(false)
+
+async function deleteAccount() {
+  if (!deletePassword.value) { deleteError.value = 'Bitte Passwort eingeben.'; return }
+  deletingAccount.value = true; deleteError.value = ''
+  try {
+    const res = await fetch(`${BASE_URL}/api/auth/account`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      body: JSON.stringify({ password: deletePassword.value }),
+    })
+    const data = await res.json()
+    if (!res.ok) { deleteError.value = data.error; return }
+    // Logout and redirect
+    auth.logout()
+    router.push('/')
+  } catch { deleteError.value = 'Verbindungsfehler.' }
+  finally { deletingAccount.value = false }
+}
 const connectEnabled   = ref(false)
 const connectAccountId = ref(null)
 const connectLoading   = ref(false)
@@ -847,9 +891,19 @@ function showFeedback(msg) {
 .logout-btn { position: relative; z-index: 1; margin-top: 1rem; background: none; border: 1px solid rgba(255,90,50,0.2); border-radius: 3px; color: rgba(255,90,50,0.5); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.08em; padding: 0.5rem 1.5rem; cursor: pointer; transition: all 0.2s; }
 .logout-btn:hover { color: #ff5a32; border-color: rgba(255,90,50,0.4); background: rgba(255,90,50,0.06); }
 
+/* Danger Zone */
+.danger-zone { border-color: rgba(255,50,50,0.15) !important; }
+.danger-title { color: rgba(255,80,80,0.6) !important; }
+.danger-desc { font-size: 0.76rem; color: rgba(240,237,230,0.35); line-height: 1.65; margin-bottom: 0.85rem; }
+.delete-account-btn { position: relative; z-index: 1; background: rgba(255,50,50,0.08); border: 1px solid rgba(255,50,50,0.3); border-radius: 3px; color: rgba(255,80,80,0.7); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; letter-spacing: 0.06em; padding: 0.55rem 1.2rem; cursor: pointer; transition: all 0.2s; }
+.delete-account-btn:hover:not(:disabled) { background: rgba(255,50,50,0.15); color: #ff5050; border-color: rgba(255,50,50,0.5); }
+.delete-account-btn:disabled { opacity: 0.4; cursor: default; }
+.cancel-delete-btn { background: none; border: 1px solid rgba(240,237,230,0.1); border-radius: 3px; color: rgba(240,237,230,0.3); font-family: 'DM Sans', sans-serif; font-size: 0.78rem; padding: 0.55rem 1rem; cursor: pointer; transition: all 0.2s; }
+.cancel-delete-btn:hover { color: #f0ede6; border-color: rgba(240,237,230,0.2); }
+.delete-confirm-btns { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+
 /* Stripe Connect */
-.connect-desc { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.65; margin-bottom: 0.75rem; }
-.connect-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 0.75rem; }
+.connect-desc { font-size: 0.78rem; color: rgba(240,237,230,0.4); line-height: 1.65; margin-bottom: 0.75rem; }.connect-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; padding: 0.5rem 0.75rem; border-radius: 4px; margin-bottom: 0.75rem; }
 .connect-status--on  { background: rgba(50,200,160,0.08); border: 1px solid rgba(50,200,160,0.2); color: #32c8a0; }
 .connect-status--off { background: rgba(240,237,230,0.03); border: 1px solid rgba(240,237,230,0.08); color: rgba(240,237,230,0.3); }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex-shrink: 0; }

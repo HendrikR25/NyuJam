@@ -568,6 +568,86 @@ app.post('/api/auth/change-password', async (req, res) => {
   res.json({ ok: true })
 })
 
+// DELETE /api/auth/account — permanently delete account and all user data (DSGVO Art. 17)
+app.delete('/api/auth/account', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt.' })
+
+  const { password } = req.body
+  if (!password) return res.status(400).json({ error: 'Passwort zur Bestätigung erforderlich.' })
+  const match = await bcrypt.compare(password, user.password)
+  if (!match) return res.status(401).json({ error: 'Falsches Passwort.' })
+
+  const uid = user.id
+
+  try {
+    // 1. Delete R2 files for all songs
+    const { data: songs } = await sb.from('songs_meta').select('mp3_url, cover_url').eq('uploaded_by', uid)
+    for (const song of songs || []) {
+      if (song.mp3_url)   deleteFromR2(decodeURIComponent(song.mp3_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+      if (song.cover_url) deleteFromR2(decodeURIComponent(song.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+    }
+
+    // 2. Delete R2 files for albums
+    const { data: albums } = await sb.from('albums').select('cover_url').eq('uploaded_by', uid)
+    for (const album of albums || []) {
+      if (album.cover_url) deleteFromR2(decodeURIComponent(album.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
+    }
+
+    // 3. Cancel Stripe subscription if active
+    const { data: sub } = await sb.from('subscriptions').select('stripe_sub_id').eq('user_id', uid).single()
+    if (sub?.stripe_sub_id) {
+      await stripe.subscriptions.cancel(sub.stripe_sub_id).catch(() => {})
+    }
+
+    // 4. Disconnect Stripe Connect if active
+    const { data: connectData } = await sb.from('users').select('stripe_connect_id').eq('id', uid).single()
+    if (connectData?.stripe_connect_id) {
+      await stripe.oauth.deauthorize({
+        client_id: process.env.STRIPE_CONNECT_CLIENT_ID,
+        stripe_user_id: connectData.stripe_connect_id,
+      }).catch(() => {})
+    }
+
+    // 5. Delete all DB data (order matters for foreign keys)
+    await sb.from('comment_likes').delete().eq('user_id', uid)
+    await sb.from('song_comments').delete().eq('user_id', uid)
+    await sb.from('radio_likes').delete().eq('user_id', uid)
+    await sb.from('radio_continent_likes').delete().eq('user_id', uid)
+    await sb.from('radio_global_likes').delete().eq('user_id', uid)
+    await sb.from('radio_listeners').delete().eq('user_id', uid)
+    await sb.from('streams').delete().eq('user_id', uid)
+    await sb.from('search_history').delete().eq('user_id', uid)
+    await sb.from('favorites').delete().eq('user_id', uid)
+    await sb.from('messages').delete().eq('sender_id', uid)
+    await sb.from('group_members').delete().eq('user_id', uid)
+    await sb.from('friendships').delete().or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+    await sb.from('playlist_songs').delete().in('playlist_id',
+      (await sb.from('playlists').select('id').eq('user_id', uid)).data?.map(p => p.id) || []
+    )
+    await sb.from('playlists').delete().eq('user_id', uid)
+    await sb.from('album_songs').delete().in('album_id',
+      (await sb.from('albums').select('id').eq('uploaded_by', uid)).data?.map(a => a.id) || []
+    )
+    await sb.from('albums').delete().eq('uploaded_by', uid)
+    await sb.from('songs_meta').delete().eq('uploaded_by', uid)
+    await sb.from('support_messages').delete().in('ticket_id',
+      (await sb.from('support_tickets').select('id').eq('user_id', uid)).data?.map(t => t.id) || []
+    )
+    await sb.from('support_tickets').delete().eq('user_id', uid)
+    await sb.from('subscriptions').delete().eq('user_id', uid)
+
+    // 6. Finally delete the user
+    await sb.from('users').delete().eq('id', uid)
+
+    console.log(`✅ Account deleted: ${uid}`)
+    res.json({ ok: true })
+  } catch (err) {
+    console.error('Account deletion error:', err.message)
+    res.status(500).json({ error: 'Fehler beim Löschen des Kontos.' })
+  }
+})
+
 app.post('/api/auth/login', async (req, res) => {
   const { identifier, password } = req.body
   if (!identifier || !password) return res.status(400).json({ error: 'Benutzername/E-Mail und Passwort erforderlich.' })
