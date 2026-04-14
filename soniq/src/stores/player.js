@@ -101,19 +101,17 @@ export const usePlayerStore = defineStore('player', () => {
   // Adopt an already-playing radio audio element into the player
   // No new loading — the song just continues playing, player UI reflects it
   function adoptRadioAudio(externalAudio, song) {
-    // Stop any current player audio
+    // Stop any current player audio if it's a different element
     if (_audio && _audio !== externalAudio) {
       _audio.pause()
       _audio.src = ''
+      _audio = null
     }
-    // Take over the external audio element as our internal one
+
+    // Take over the external audio element
     _audio = externalAudio
-    // Re-attach player event listeners to the new audio element
-    _audio.addEventListener('timeupdate',     () => { currentTime.value = _audio.currentTime })
-    _audio.addEventListener('loadedmetadata', () => { duration.value    = _audio.duration })
-    _audio.addEventListener('canplay',        () => { isLoading.value   = false })
-    _audio.addEventListener('error',          () => { error.value = 'Wiedergabe fehlgeschlagen.'; isPlaying.value = false; isLoading.value = false })
-    // Set player state to reflect what's already playing
+
+    // Sync player state from the live audio — no play() call needed
     currentSong.value = song
     isPlaying.value   = !externalAudio.paused
     isLoading.value   = false
@@ -121,6 +119,11 @@ export const usePlayerStore = defineStore('player', () => {
     currentTime.value = externalAudio.currentTime
     duration.value    = externalAudio.duration || 0
     isLiked.value     = likedSongs.value.some(f => String(f.id) === String(song.id))
+
+    // Attach timeupdate so the scrubber works — use named fn to avoid dupes
+    externalAudio.ontimeupdate    = () => { currentTime.value = externalAudio.currentTime }
+    externalAudio.ondurationchange = () => { duration.value   = externalAudio.duration }
+    // Don't override onended — RadioView already handles next-song logic
   }
 
   // Keep for backwards compat but simplified — no longer used for radio

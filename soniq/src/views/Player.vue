@@ -162,13 +162,15 @@ import AdBanner from '@/components/AdBanner.vue'
 import SongMenu from '@/components/SongMenu.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { usePlayerStore } from '@/stores/player'
-import { useAuthStore }   from '@/stores/auth'
+import { usePlayerStore }    from '@/stores/player'
+import { useAuthStore }      from '@/stores/auth'
+import { usePlaylistsStore } from '@/stores/playlists'
 
 const router = useRouter()
 const route  = useRoute()
 const player = usePlayerStore()
 const auth   = useAuthStore()
+const playlistsStore = usePlaylistsStore()
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 function authHeader() {
