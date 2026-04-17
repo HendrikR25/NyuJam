@@ -616,7 +616,10 @@ function playRankSong(r) {
 // Open radio song in player — adopt the already-playing audio, no restart
 function playCurrentSong(song) {
   if (!radioAudio) return
-  player.fromRoute = '/radio'
+  // Ensure radioState has the current song with correct field names
+  radioState.audio = radioAudio
+  radioState.song  = { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }
+  player.fromRoute   = '/radio'
   player.isRadioMode = true
   router.push('/player')
 }
