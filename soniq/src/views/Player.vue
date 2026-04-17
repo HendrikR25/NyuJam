@@ -109,8 +109,9 @@
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
       </button>
 
-      <button class="ctrl-btn ctrl-heart" :class="{ liked: player.isLiked }" @click="player.toggleLike()">
-        <svg width="20" height="20" viewBox="0 0 24 24" :fill="player.isLiked ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <button class="ctrl-btn ctrl-heart" :class="{ liked: player.isLiked }" @click="player.toggleLike()" :title="player.isLiked ? 'Aus Favoriten entfernen' : 'Zu Favoriten hinzufügen'">
+        <svg v-if="player.isLiked" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+        <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
 
       <!-- Three dots menu -->
@@ -156,9 +157,7 @@
     </div>
 
     <!-- No songs / server offline -->
-    <div class="no-songs" v-else-if="!player.isLoading && !player.error">
-      <p>Keine Songs gefunden.</p>
-      <p class="no-songs-hint">Lege MP3s in <code>server/music/</code> ab und starte den Server.</p>
+    <div class="no-songs" v-else-if="!player.isLoading && !player.error && !radioState.isRadioMode">
     </div>
 
   </div>
