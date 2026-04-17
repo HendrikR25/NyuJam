@@ -700,6 +700,9 @@ function countryStroke(f) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
+  // If returning from radio-mode player, isRadioMode is still true — reset it
+  if (player.isRadioMode) player.isRadioMode = false
+
   // Load global radio immediately (world view)
   loadGlobalRadio()
 
@@ -744,7 +747,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  stopRadioAudio()
+  if (!player.isRadioMode) {
+    stopRadioAudio()
+  }
   clearInterval(radioTimer)
   player.stopRadioMirror()
 })

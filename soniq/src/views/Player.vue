@@ -272,7 +272,6 @@ onUnmounted(() => {
 })
 
 function goBack() {
-  if (player.isRadioMode) player.isRadioMode = false
   router.replace(player.fromRoute || '/')
 }
 
