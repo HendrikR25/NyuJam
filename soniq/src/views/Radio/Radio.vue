@@ -616,11 +616,10 @@ function playRankSong(r) {
 // Open radio song in player — adopt the already-playing audio, no restart
 function playCurrentSong(song) {
   if (!radioAudio) return
-  // Ensure radioState has the current song with correct field names
-  radioState.audio = radioAudio
-  radioState.song  = { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }
-  player.fromRoute   = '/radio'
-  player.isRadioMode = true
+  radioState.audio       = radioAudio
+  radioState.song        = { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }
+  radioState.isRadioMode = true
+  player.fromRoute       = '/radio'
   router.push('/player')
 }
 
@@ -703,10 +702,10 @@ function countryStroke(f) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
-  // If returning from radio-mode player, isRadioMode is still true — reset it
-  if (player.isRadioMode) player.isRadioMode = false
-
-  // Load global radio immediately (world view)
+  // Returning from radio-mode player — reset
+  if (radioState.isRadioMode) {
+    radioState.isRadioMode = false
+  }
   loadGlobalRadio()
 
   try {
@@ -750,7 +749,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (!player.isRadioMode) {
+  if (!radioState.isRadioMode) {
     stopRadioAudio()
   }
   clearInterval(radioTimer)

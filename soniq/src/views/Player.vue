@@ -20,7 +20,7 @@
 
     <!-- Cover -->
     <div class="cover-wrap">
-      <div class="cover" :class="{ playing: player.isRadioMode || player.isPlaying, loading: player.isLoading }">
+      <div class="cover" :class="{ playing: radioState.isRadioMode || player.isPlaying, loading: player.isLoading }">
         <div class="cover-inner" :style="{ background: coverGradient }">
           <img v-if="displaySong?.cover" :src="displaySong.cover" class="cover-img" />
           <span v-else-if="player.isLoading" class="cover-spinner"></span>
@@ -37,7 +37,7 @@
       <button class="song-artist-btn" @click="router.push(`/artist/${encodeURIComponent(displaySong.artist)}`)">
         {{ displaySong.artist }}
       </button>
-      <div v-if="player.isRadioMode" class="radio-mode-badge">📻 Radio läuft</div>
+      <div v-if="radioState.isRadioMode" class="radio-mode-badge">📻 Radio läuft</div>
     </div>
     <div class="song-info song-info--empty" v-else>
       <span class="song-artist">Kein Song ausgewählt</span>
@@ -67,7 +67,7 @@
       </transition>
 
       <!-- Scrubber -->
-      <div class="scrubber" ref="scrubberRef" @mousedown="!player.isRadioMode && startScrub($event)" @touchstart.prevent="!player.isRadioMode && startScrub($event)">
+      <div class="scrubber" ref="scrubberRef" @mousedown="!radioState.isRadioMode && startScrub($event)" @touchstart.prevent="!radioState.isRadioMode && startScrub($event)">
         <div class="scrubber-track">
           <div class="scrubber-fill" :style="{ width: displayPct + '%' }"></div>
           <div
@@ -87,11 +87,11 @@
         <span class="tip-symbol">€</span>
       </button>
 
-      <button class="ctrl-btn ctrl-skip" @click="player.prev()" :disabled="!player.hasPrev || player.isRadioMode">
+      <button class="ctrl-btn ctrl-skip" @click="player.prev()" :disabled="!player.hasPrev || radioState.isRadioMode">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/></svg>
       </button>
 
-      <template v-if="player.isRadioMode">
+      <template v-if="radioState.isRadioMode">
         <div class="ctrl-btn ctrl-play ctrl-radio-live" title="Radio läuft">
           <span class="radio-live-dot"></span>
         </div>
@@ -105,7 +105,7 @@
         </button>
       </template>
 
-      <button class="ctrl-btn ctrl-skip" @click="player.next()" :disabled="!player.hasNext || player.isRadioMode">
+      <button class="ctrl-btn ctrl-skip" @click="player.next()" :disabled="!player.hasNext || radioState.isRadioMode">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zm9-12v12h2V6h-2z"/></svg>
       </button>
 
@@ -187,15 +187,15 @@ function authHeader() {
 }
 
 // ── Radio mode ─────────────────────────────────────────
-// When player.isRadioMode, we read directly from radioState instead of player store
+// When radioState.isRadioMode, we read directly from radioState instead of player store
 const radioCurrentTime = ref(0)
 const radioDuration    = ref(0)
 let   radioInterval    = null
 
-const displaySong    = computed(() => player.isRadioMode ? radioState.song  : player.currentSong)
-const displayTime    = computed(() => player.isRadioMode ? radioCurrentTime.value : player.currentTime)
-const displayDur     = computed(() => player.isRadioMode ? radioDuration.value    : player.duration)
-const displayPct     = computed(() => displayDur.value > 0 ? (displayTime.value / displayDur.value) * 100 : 0)
+const displaySong = computed(() => radioState.isRadioMode ? radioState.song  : player.currentSong)
+const displayTime = computed(() => radioState.isRadioMode ? radioCurrentTime.value : player.currentTime)
+const displayDur  = computed(() => radioState.isRadioMode ? radioDuration.value    : player.duration)
+const displayPct  = computed(() => displayDur.value > 0 ? (displayTime.value / displayDur.value) * 100 : 0)
 
 // ── Comments (timestamp overlay only) ─────────────────
 const commentCount           = ref(0)
@@ -250,7 +250,7 @@ function avatarColor(name) {
 }
 
 onMounted(() => {
-  if (player.isRadioMode && radioState.audio) {
+  if (radioState.isRadioMode && radioState.audio) {
     radioCurrentTime.value = radioState.audio.currentTime
     radioDuration.value    = radioState.audio.duration || 0
     radioInterval = setInterval(() => {
@@ -294,7 +294,7 @@ const coverGradients = [
 ]
 const accentColors = ['#32c8a0','#5b6aff','#ff5a32','#c864f0','#f0c832']
 
-const songIndex    = computed(() => player.isRadioMode
+const songIndex    = computed(() => radioState.isRadioMode
   ? (radioState.song?.name?.charCodeAt(0) || 0) % 8
   : player.currentIndex
 )
