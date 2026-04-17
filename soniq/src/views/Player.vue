@@ -269,9 +269,25 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (radioInterval) { clearInterval(radioInterval); radioInterval = null }
+  // If radio is still running but user navigated away (not via goBack to radio),
+  // stop it to prevent background audio leaking
+  if (radioState.isRadioMode && player.fromRoute !== '/radio') {
+    radioState.audio?.pause()
+    radioState.audio = null
+    radioState.song  = null
+    radioState.isRadioMode = false
+  }
 })
 
 function goBack() {
+  const goingToRadio = player.fromRoute === '/radio'
+  if (!goingToRadio) {
+    // Leaving to somewhere other than radio — stop the radio audio
+    radioState.audio?.pause()
+    radioState.audio = null
+    radioState.song  = null
+    radioState.isRadioMode = false
+  }
   router.replace(player.fromRoute || '/')
 }
 

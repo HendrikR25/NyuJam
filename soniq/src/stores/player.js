@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { radioState } from './radioState'
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
@@ -91,6 +92,13 @@ export const usePlayerStore = defineStore('player', () => {
 
   function play(song) {
     stopRadioMirror()  // clears isRadioMode too
+    // Stop any running radio audio
+    if (radioState.audio) {
+      radioState.audio.pause()
+      radioState.audio = null
+      radioState.song  = null
+      radioState.isRadioMode = false
+    }
     const audio = getAudio()
     currentSong.value = song
     isPlaying.value   = false
