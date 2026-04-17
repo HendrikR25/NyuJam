@@ -541,7 +541,7 @@ async function loadGlobalRadio() {
   } catch { globalRadio.value.loading = false }
 }
 
-// Load global radio state for UI only — don't touch audio (used when returning from player)
+// Load global radio state for UI only — don't touch audio
 async function loadGlobalRadioSilent() {
   try {
     const [stateRes, histRes] = await Promise.all([
@@ -551,7 +551,40 @@ async function loadGlobalRadioSilent() {
     const state = await stateRes.json()
     const hist  = await histRes.json()
     globalRadio.value = { ...state, history: hist, loading: false, isLiked: globalRadio.value.isLiked }
-    // Don't call playStreamSong — audio is already running
+  } catch {}
+}
+
+// Load continent radio state for UI only — don't touch audio
+async function loadContinentRadioSilent(id) {
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`${BASE_URL}/api/radio/continent/${id}`),
+      fetch(`${BASE_URL}/api/radio/continent/${id}/rankings`),
+    ])
+    const state = await stateRes.json()
+    const hist  = await histRes.json()
+    continentRadio.value = { ...state, history: hist, loading: false, isLiked: continentRadio.value.isLiked }
+  } catch {}
+}
+
+// Load country radio state for UI only — don't touch audio
+async function loadCountryRadioSilent(code) {
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`${BASE_URL}/api/radio/country/${code}`),
+      fetch(`${BASE_URL}/api/radio/country/${code}/rankings/weekly`),
+    ])
+    const data    = await stateRes.json()
+    const histRaw = await histRes.json()
+    const byWeek  = {}
+    for (const r of histRaw || []) {
+      if (!byWeek[r.week_start]) byWeek[r.week_start] = []
+      byWeek[r.week_start].push(r)
+    }
+    const weeklyHistory = Object.entries(byWeek)
+      .sort((a, b) => b[0].localeCompare(a[0]))
+      .map(([week_start, songs]) => ({ week_start, songs: songs.sort((a, b) => b.like_pct - a.like_pct) }))
+    countryRadio.value = { ...countryRadio.value, ...data, weeklyHistory }
   } catch {}
 }
 
@@ -630,10 +663,14 @@ function playRankSong(r) {
 // Open radio song in player — adopt the already-playing audio, no restart
 function playCurrentSong(song) {
   if (!radioAudio) return
-  radioState.audio       = radioAudio
-  radioState.song        = { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }
-  radioState.isRadioMode = true
-  player.fromRoute       = '/radio'
+  radioState.audio          = radioAudio
+  radioState.song           = { id: song.id, name: song.name, artist: song.artist, cover: song.cover, url: song.url }
+  radioState.isRadioMode    = true
+  radioState.level          = activeCountry.value ? 'country' : activeContinent.value ? 'continent' : 'global'
+  radioState.continentId    = activeContinent.value?.id   || null
+  radioState.continentName  = activeContinent.value?.name || null
+  radioState.countryIso     = activeCountry.value?.iso    || null
+  player.fromRoute          = '/radio'
   router.push('/player')
 }
 
@@ -716,10 +753,27 @@ function countryStroke(f) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
-  // Returning from radio-mode player — audio is still running, don't restart
   if (radioState.isRadioMode) {
     radioState.isRadioMode = false
-    loadGlobalRadioSilent()  // restore UI state without touching audio
+    // Restore the exact sender state without restarting audio
+    if (radioState.level === 'continent' && radioState.continentId) {
+      const meta = continentMeta.find(c => c.id === radioState.continentId)
+      if (meta) {
+        activeContinent.value = meta
+        zoomToContinent(radioState.continentId)
+      }
+      loadContinentRadioSilent(radioState.continentId)
+    } else if (radioState.level === 'country' && radioState.continentId) {
+      const meta = continentMeta.find(c => c.id === radioState.continentId)
+      if (meta) activeContinent.value = meta
+      if (radioState.countryIso) {
+        activeCountry.value = { iso: radioState.countryIso, id: radioState.countryIso }
+        zoomToCountry(radioState.countryIso)
+        loadCountryRadioSilent(radioState.countryIso)
+      }
+    } else {
+      loadGlobalRadioSilent()
+    }
   } else {
     loadGlobalRadio()
   }
