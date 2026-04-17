@@ -541,6 +541,20 @@ async function loadGlobalRadio() {
   } catch { globalRadio.value.loading = false }
 }
 
+// Load global radio state for UI only — don't touch audio (used when returning from player)
+async function loadGlobalRadioSilent() {
+  try {
+    const [stateRes, histRes] = await Promise.all([
+      fetch(`${BASE_URL}/api/radio/global`),
+      fetch(`${BASE_URL}/api/radio/global/rankings`),
+    ])
+    const state = await stateRes.json()
+    const hist  = await histRes.json()
+    globalRadio.value = { ...state, history: hist, loading: false, isLiked: globalRadio.value.isLiked }
+    // Don't call playStreamSong — audio is already running
+  } catch {}
+}
+
 // ── Audio helpers ──────────────────────────────────────
 function stopRadioAudio() {
   if (radioAudio) { radioAudio.pause(); radioAudio.src = ''; radioAudio = null }
@@ -702,11 +716,13 @@ function countryStroke(f) {
 
 // ── Load world data ────────────────────────────────────
 onMounted(async () => {
-  // Returning from radio-mode player — reset
+  // Returning from radio-mode player — audio is still running, don't restart
   if (radioState.isRadioMode) {
     radioState.isRadioMode = false
+    loadGlobalRadioSilent()  // restore UI state without touching audio
+  } else {
+    loadGlobalRadio()
   }
-  loadGlobalRadio()
 
   try {
     const res  = await fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
