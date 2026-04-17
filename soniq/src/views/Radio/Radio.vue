@@ -591,6 +591,10 @@ async function loadCountryRadioSilent(code) {
 // ── Audio helpers ──────────────────────────────────────
 function stopRadioAudio() {
   if (radioAudio) { radioAudio.pause(); radioAudio.src = ''; radioAudio = null }
+  if (radioState.audio && radioState.audio !== radioAudio) {
+    radioState.audio.pause()
+    radioState.audio.src = ''
+  }
   radioState.audio = null
   radioState.song  = null
 }
@@ -755,6 +759,8 @@ function countryStroke(f) {
 onMounted(async () => {
   if (radioState.isRadioMode) {
     radioState.isRadioMode = false
+    // Sync local radioAudio variable with the still-running audio from radioState
+    radioAudio = radioState.audio
     // Restore the exact sender state without restarting audio
     if (radioState.level === 'continent' && radioState.continentId) {
       const meta = continentMeta.find(c => c.id === radioState.continentId)
