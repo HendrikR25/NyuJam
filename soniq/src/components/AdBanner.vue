@@ -1,14 +1,6 @@
 <template>
-  <div class="ad-banner-wrap" v-if="!isSubscriber">
-    <span class="ad-label">Anzeige</span>
-    <ins
-      class="adsbygoogle"
-      :style="{ display: 'block', width: '100%', height: slotHeight + 'px' }"
-      :data-ad-client="adClient"
-      :data-ad-slot="adSlot"
-      data-ad-format="auto"
-      data-full-width-responsive="true"
-    ></ins>
+  <div class="ad-banner-wrap" v-if="false">
+    <!-- AdSense disabled until approved -->
   </div>
 </template>
 
@@ -64,4 +56,4 @@ onMounted(() => {
 .adsbygoogle {
   max-width: 728px;
 }
-</style> 
+</style>
