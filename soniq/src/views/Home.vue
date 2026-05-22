@@ -329,12 +329,12 @@ async function loadStats() {
     if (!res.ok) return
     const data = await res.json()
     stats.value = {
-      minsWeek:      data.minsWeek      || stats.value.minsWeek,
-      streaksWeek:   stats.value.streaksWeek, // no real streak yet — keep gimmick
-      songsWeek:     data.streamsWeek   || stats.value.songsWeek,
-      topArtist:     stats.value.topArtist,   // no top artist endpoint yet
-      countriesHeard:stats.value.countriesHeard,
-      topGenre:      data.topGenre      || stats.value.topGenre,
+      minsWeek:       data.minsWeek      ?? stats.value.minsWeek,
+      streaksWeek:    data.streak        ?? stats.value.streaksWeek,
+      songsWeek:      data.streamsWeek   ?? stats.value.songsWeek,
+      topArtist:      data.topArtist     || stats.value.topArtist,
+      countriesHeard: data.countriesHeard ?? stats.value.countriesHeard,
+      topGenre:       data.topGenre      || stats.value.topGenre,
     }
   } catch {}
 }

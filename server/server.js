@@ -1099,6 +1099,9 @@ app.get('/api/stats/me', async (req, res) => {
     { count: uploadCount },
     { count: likeCount },
     { data: genreData },
+    { data: artistData },
+    { data: countriesData },
+    { data: streakData },
   ] = await Promise.all([
     sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid),
     sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid).gte('played_at', weekStart.toISOString()),
@@ -1107,11 +1110,13 @@ app.get('/api/stats/me', async (req, res) => {
     sb.from('song_comments').select('*', { count: 'exact', head: true }).eq('user_id', uid),
     sb.from('songs_meta').select('*', { count: 'exact', head: true }).eq('uploaded_by', uid),
     sb.from('radio_likes').select('*', { count: 'exact', head: true }).eq('user_id', uid),
-    // Top genre this week: join streams → songs_meta via song_id
     sb.from('streams').select('song_id').eq('user_id', uid).gte('played_at', weekStart.toISOString()).limit(200),
+    sb.from('streams').select('artist').eq('user_id', uid).not('artist', 'is', null).limit(500),
+    sb.from('radio_listeners').select('country').eq('user_id', uid),
+    sb.from('streams').select('played_at').eq('user_id', uid).order('played_at', { ascending: false }).limit(30),
   ])
 
-  // Resolve genres for this week's streams
+  // Top genre this week
   let topGenre = null
   if (genreData?.length) {
     const songIds = [...new Set(genreData.map(r => r.song_id.replace(/^u_/, '')))]
@@ -1121,6 +1126,30 @@ app.get('/api/stats/me', async (req, res) => {
       if (s.genre) genreCounts[s.genre] = (genreCounts[s.genre] || 0) + 1
     }
     topGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+  }
+
+  // Top artist (all time)
+  const artistCounts = {}
+  for (const r of artistData || []) {
+    if (r.artist) artistCounts[r.artist] = (artistCounts[r.artist] || 0) + 1
+  }
+  const topArtist = Object.entries(artistCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+
+  // Unique countries heard via radio
+  const uniqueCountries = new Set((countriesData || []).map(r => r.country)).size
+
+  // Streak — consecutive days with at least one stream
+  let streak = 0
+  if (streakData?.length) {
+    const days = new Set(streakData.map(r => r.played_at.slice(0, 10)))
+    const today = new Date()
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(today)
+      d.setUTCDate(today.getUTCDate() - i)
+      const key = d.toISOString().slice(0, 10)
+      if (days.has(key)) streak++
+      else if (i > 0) break // allow today to be missing (day not over)
+    }
   }
 
   res.json({
@@ -1134,6 +1163,9 @@ app.get('/api/stats/me', async (req, res) => {
     uploadCount:   uploadCount   || 0,
     likeCount:     likeCount     || 0,
     topGenre,
+    topArtist,
+    streak,
+    countriesHeard: uniqueCountries,
   })
 })
 
