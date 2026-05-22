@@ -1092,6 +1092,7 @@ app.get('/api/stats/me', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const uid = user.id
+  console.log('Stats request for uid:', uid, typeof uid)
   const weekStart = new Date()
   weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay())
   weekStart.setUTCHours(0, 0, 0, 0)
@@ -1125,6 +1126,8 @@ app.get('/api/stats/me', async (req, res) => {
     sb.from('streams').select('duration_secs').eq('user_id', uid).gte('played_at', weekStart.toISOString()).not('duration_secs', 'is', null),
     sb.from('streams').select('duration_secs').eq('user_id', uid).not('duration_secs', 'is', null),
   ])
+
+  console.log('Stats results — streamsTotal:', streamsTotal, 'streamsWeek:', streamsWeek, 'weekStart:', weekStart.toISOString())
 
   // Top genre this week
   let topGenre = null
