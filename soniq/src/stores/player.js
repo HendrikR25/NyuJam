@@ -94,16 +94,19 @@ export const usePlayerStore = defineStore('player', () => {
     _streamTimer = setTimeout(() => {
       if (_streamLogged) return
       _streamLogged = true
-      // Send full song duration (or current duration if known) as listened_seconds
-      const listenedSecs = Math.round(getAudio()?.duration || 0)
+      const listenedSecs = Math.round(_audio?.duration || 0)
+      const token = localStorage.getItem('nyujam_token') || ''
       fetch(`${BASE_URL}/api/streams`, {
         method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
-          songId:         song.id,
-          songName:       song.name,
-          artist:         song.artist,
-          durationSecs:   listenedSecs,
+          songId:       song.id,
+          songName:     song.name,
+          artist:       song.artist,
+          durationSecs: listenedSecs,
         }),
       }).catch(() => {})
     }, 30_000)

@@ -1169,7 +1169,6 @@ app.get('/api/stats/me', async (req, res) => {
   const minsTotal = durationTotalData?.length
     ? Math.round(durationTotalData.reduce((s, r) => s + (r.duration_secs || 210), 0) / 60)
     : Math.round((streamsTotal || 0) * 3.5)
-
   res.json({
     streamsTotal:   streamsTotal   || 0,
     streamsWeek:    streamsWeek    || 0,
