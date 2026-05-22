@@ -297,6 +297,7 @@ onMounted(() => {
   if (!plStore.playlists.length) plStore.load()
   pickRandom()
   loadTopSongs()
+  loadStats()
 })
 
 function navigate(item) {
@@ -307,16 +308,35 @@ function navigate(item) {
 }
 
 // ── Gimmick Stats ────────────────────────────────────
+// ── Stats ─────────────────────────────────────────────
 const genres  = ['Electronic', 'Hip-Hop', 'Indie', 'Pop', 'R&B', 'Jazz', 'Rock', 'Ambient', 'Folk', 'Classical', 'Reggae', 'Metal']
 const artists = ['Meridon', 'The Midnight', 'Bicep', 'Caribou', 'Four Tet', 'Bonobo', 'Tycho', 'Nils Frahm']
 const rand    = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-const stats   = {
+
+const stats = ref({
   minsWeek:      rand(42, 340),
   streaksWeek:   rand(1, 7),
   songsWeek:     rand(8, 120),
   topArtist:     artists[rand(0, artists.length - 1)],
   countriesHeard:rand(2, 18),
   topGenre:      genres[rand(0, genres.length - 1)],
+})
+
+async function loadStats() {
+  if (!auth.isLoggedIn) return
+  try {
+    const res  = await fetch(`${BASE_URL}/api/stats/me`, { headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` } })
+    if (!res.ok) return
+    const data = await res.json()
+    stats.value = {
+      minsWeek:      data.minsWeek      || stats.value.minsWeek,
+      streaksWeek:   stats.value.streaksWeek, // no real streak yet — keep gimmick
+      songsWeek:     data.streamsWeek   || stats.value.songsWeek,
+      topArtist:     stats.value.topArtist,   // no top artist endpoint yet
+      countriesHeard:stats.value.countriesHeard,
+      topGenre:      data.topGenre      || stats.value.topGenre,
+    }
+  } catch {}
 }
 const wheelOpen    = ref(false)
 const wheelOriginX = ref(0)

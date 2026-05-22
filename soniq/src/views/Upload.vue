@@ -71,6 +71,12 @@
           <input v-model="city" class="field-input" type="text" placeholder="z.B. Berlin..." maxlength="60" />
         </div>
         <div class="field">
+          <label class="field-label">Genre <span class="optional-tag">optional</span></label>
+          <select v-model="genre" class="field-input field-select">
+            <option v-for="g in genres" :key="g" :value="g">{{ g }}</option>
+          </select>
+        </div>
+        <div class="field">
           <label class="field-label">Veröffentlichungsdatum <span class="optional-tag">optional</span></label>
           <input v-model="releasedAt" class="field-input" type="date" :max="today" />
           <span class="field-hint">Leer lassen für heutiges Datum</span>
@@ -229,6 +235,15 @@ const artist         = ref('')
 const selectedCountry = ref('')
 const city           = ref('')
 const releasedAt     = ref('')
+const genre          = ref('')
+
+const genres = [
+  '— Kein Genre —',
+  'Afrobeats', 'Ambient', 'Blues', 'Bossa Nova', 'Classical', 'Country',
+  'Dance', 'Electronic', 'Folk', 'Funk', 'Gospel', 'Hip-Hop', 'House',
+  'Indie', 'Jazz', 'Latin', 'Metal', 'Opera', 'Pop', 'Punk', 'R&B',
+  'Reggae', 'Reggaeton', 'Rock', 'Soul', 'Techno', 'Trap', 'World Music',
+]
 const coverFile      = ref(null)
 const coverPreview   = ref(null)
 const coverInputRef  = ref(null)
@@ -396,6 +411,7 @@ async function submitSong() {
     formData.append('country',   selectedCountry.value)
     formData.append('city',      city.value.trim())
     formData.append('continent', selectedContinent.value || '')
+    if (genre.value && genre.value !== '— Kein Genre —') formData.append('genre', genre.value)
     if (releasedAt.value) formData.append('releasedAt', releasedAt.value)
 
     const song = await new Promise((resolve, reject) => {

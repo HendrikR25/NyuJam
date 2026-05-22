@@ -195,7 +195,7 @@ app.get('/api/songs/all', async (req, res) => {
     return { id: `l_${i+1}`, artist: parts[0]?.trim() ?? 'Unbekannt', name: parts[1]?.trim() ?? name, cover: null, url: `${proto}://${host}/music/${encodeURIComponent(file)}`, country: null, city: null, continent: null }
   })
   const { data } = await sb.from('songs_meta').select('*')
-  const uploaded = (data || []).map(s => ({ id: `u_${s.id}`, artist: s.artist, name: s.title, cover: s.cover_url, url: s.mp3_url, country: s.country, city: s.city, continent: s.continent }))
+  const uploaded = (data || []).map(s => ({ id: `u_${s.id}`, artist: s.artist, name: s.title, cover: s.cover_url, url: s.mp3_url, country: s.country, city: s.city, continent: s.continent, genre: s.genre || null }))
   res.json([...uploaded, ...local])
 })
 
@@ -287,6 +287,7 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
   const country   = req.body.country?.trim()
   const city      = req.body.city?.trim() || null
   const continent = req.body.continent?.trim() || null
+  const genre     = req.body.genre?.trim() || null
   if (!mp3File) return res.status(400).json({ error: 'MP3-Datei fehlt' })
   if (!title)   return res.status(400).json({ error: 'Titel fehlt' })
   if (!country) return res.status(400).json({ error: 'Land fehlt' })
@@ -299,7 +300,7 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
       coverUrl = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     }
     const mp3Url = await uploadToR2(mp3File.buffer, mp3Key, 'audio/mpeg')
-    const { data, error } = await sb.from('songs_meta').insert({ id, title, artist, mp3_url: mp3Url, cover_url: coverUrl, country, city, continent, uploaded_by: user.id }).select().single()
+    const { data, error } = await sb.from('songs_meta').insert({ id, title, artist, mp3_url: mp3Url, cover_url: coverUrl, country, city, continent, genre, uploaded_by: user.id }).select().single()
     if (error) throw new Error(error.message)
 
     // Add to country radio queue
@@ -1015,12 +1016,125 @@ app.delete('/api/albums/:id', async (req, res) => {
 })
 
 // ── Streams ────────────────────────────────────────────
+// GET /api/stats/me — fun personal stats for home dashboard
+app.get('/api/stats/me', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+
+  const uid = user.id
+  const now = new Date()
+  const weekStart = new Date(now)
+  weekStart.setUTCDate(now.getUTCDate() - now.getUTCDay())
+  weekStart.setUTCHours(0,0,0,0)
+
+  const [
+    { count: streamsTotal },
+    { count: streamsWeek },
+    { count: favCount },
+    { count: playlistCount },
+    { count: commentCount },
+    { count: uploadCount },
+    { count: likeCount },
+    { data: topArtistData },
+  ] = await Promise.all([
+    sb.from('streams').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('streams').select('*', { count:'exact', head:true }).eq('user_id', uid).gte('created_at', weekStart.toISOString()),
+    sb.from('favorites').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('playlists').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('song_comments').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('songs_meta').select('*', { count:'exact', head:true }).eq('uploaded_by', uid),
+    sb.from('radio_likes').select('*', { count:'exact', head:true }).eq('user_id', uid),
+    sb.from('streams').select('artist').eq('user_id', uid).not('artist', 'is', null).limit(200),
+  ])
+
+  // Most listened artist
+  const artistCounts = {}
+  for (const r of topArtistData || []) {
+    if (r.artist) artistCounts[r.artist] = (artistCounts[r.artist] || 0) + 1
+  }
+  const topArtist = Object.entries(artistCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || null
+
+  // Estimated minutes (avg song ~3.5 min)
+  const minsTotal = Math.round((streamsTotal || 0) * 3.5)
+  const minsWeek  = Math.round((streamsWeek  || 0) * 3.5)
+
+  res.json({
+    streamsTotal: streamsTotal || 0,
+    streamsWeek:  streamsWeek  || 0,
+    minsTotal,
+    minsWeek,
+    favCount:     favCount     || 0,
+    playlistCount:playlistCount|| 0,
+    commentCount: commentCount || 0,
+    uploadCount:  uploadCount  || 0,
+    likeCount:    likeCount    || 0,
+    topArtist,
+  })
+})
+
 // POST /api/streams — log a play
 app.post('/api/streams', async (req, res) => {
+  const user = await getUserFromToken(req)
   const { songId, songName, artist } = req.body
   if (!songId) return res.status(400).json({ error: 'songId fehlt' })
-  await sb.from('streams').insert({ song_id: String(songId), song_name: songName || null, artist: artist || null })
+  await sb.from('streams').insert({ song_id: String(songId), song_name: songName || null, artist: artist || null, user_id: user?.id || null })
   res.json({ ok: true })
+})
+
+// GET /api/stats/me — personal stats for home dashboard
+app.get('/api/stats/me', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const uid = user.id
+  const weekStart = new Date()
+  weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay())
+  weekStart.setUTCHours(0, 0, 0, 0)
+
+  const [
+    { count: streamsTotal },
+    { count: streamsWeek },
+    { count: favCount },
+    { count: playlistCount },
+    { count: commentCount },
+    { count: uploadCount },
+    { count: likeCount },
+    { data: genreData },
+  ] = await Promise.all([
+    sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid).gte('played_at', weekStart.toISOString()),
+    sb.from('favorites').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    sb.from('playlists').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    sb.from('song_comments').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    sb.from('songs_meta').select('*', { count: 'exact', head: true }).eq('uploaded_by', uid),
+    sb.from('radio_likes').select('*', { count: 'exact', head: true }).eq('user_id', uid),
+    // Top genre this week: join streams → songs_meta via song_id
+    sb.from('streams').select('song_id').eq('user_id', uid).gte('played_at', weekStart.toISOString()).limit(200),
+  ])
+
+  // Resolve genres for this week's streams
+  let topGenre = null
+  if (genreData?.length) {
+    const songIds = [...new Set(genreData.map(r => r.song_id.replace(/^u_/, '')))]
+    const { data: songsMeta } = await sb.from('songs_meta').select('id, genre').in('id', songIds)
+    const genreCounts = {}
+    for (const s of songsMeta || []) {
+      if (s.genre) genreCounts[s.genre] = (genreCounts[s.genre] || 0) + 1
+    }
+    topGenre = Object.entries(genreCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null
+  }
+
+  res.json({
+    streamsTotal:  streamsTotal  || 0,
+    streamsWeek:   streamsWeek   || 0,
+    minsWeek:      Math.round((streamsWeek  || 0) * 3.5),
+    minsTotal:     Math.round((streamsTotal || 0) * 3.5),
+    favCount:      favCount      || 0,
+    playlistCount: playlistCount || 0,
+    commentCount:  commentCount  || 0,
+    uploadCount:   uploadCount   || 0,
+    likeCount:     likeCount     || 0,
+    topGenre,
+  })
 })
 
 // GET /api/streams/song/:songId — stream count for one song
