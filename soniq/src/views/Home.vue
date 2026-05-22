@@ -115,21 +115,21 @@
           <div class="section-label">Deine Woche</div>
           <div class="stats-grid">
             <div class="stat-card">
-              <div class="stat-val">{{ stats.minsWeek }}</div>
-              <div class="stat-unit">min</div>
+              <div class="stat-val">{{ stats.minsWeek ?? '—' }}</div>
+              <div class="stat-unit" v-if="stats.minsWeek !== null">min</div>
               <div class="stat-label">Musik gehört</div>
             </div>
             <div class="stat-card">
-              <div class="stat-val">{{ stats.streaksWeek }}</div>
-              <div class="stat-unit">Tage</div>
+              <div class="stat-val">{{ stats.streaksWeek ?? '—' }}</div>
+              <div class="stat-unit" v-if="stats.streaksWeek !== null">Tage</div>
               <div class="stat-label">Streak 🔥</div>
             </div>
             <div class="stat-card">
-              <div class="stat-val">{{ stats.songsWeek }}</div>
-              <div class="stat-unit">Songs</div>
+              <div class="stat-val">{{ stats.songsWeek ?? '—' }}</div>
+              <div class="stat-unit" v-if="stats.songsWeek !== null">Songs</div>
               <div class="stat-label">diese Woche</div>
             </div>
-            <div class="stat-card stat-card--wide">
+            <div class="stat-card stat-card--wide" v-if="stats.topArtist">
               <div class="stat-top-artist">
                 <div class="sta-icon">◈</div>
                 <div>
@@ -138,13 +138,19 @@
                 </div>
               </div>
             </div>
-            <div class="stat-card stat-card--fun">
+            <div class="stat-card stat-card--wide stat-card--empty" v-else>
+              <div class="stat-label">Lieblingskünstler — noch keine Daten</div>
+            </div>
+            <div class="stat-card stat-card--fun" v-if="stats.topGenre">
               <div class="stat-val-sm" style="font-size:1rem;font-weight:700;color:#f0ede6;">{{ stats.topGenre }}</div>
               <div class="stat-label">Top Genre</div>
             </div>
+            <div class="stat-card stat-card--fun stat-card--empty" v-else>
+              <div class="stat-label">Top Genre — noch keine Daten</div>
+            </div>
             <div class="stat-card">
-              <div class="stat-val">{{ stats.countriesHeard }}</div>
-              <div class="stat-unit">Länder</div>
+              <div class="stat-val">{{ stats.countriesHeard ?? '—' }}</div>
+              <div class="stat-unit" v-if="stats.countriesHeard !== null">Länder</div>
               <div class="stat-label">Radio gehört</div>
             </div>
           </div>
@@ -309,17 +315,13 @@ function navigate(item) {
 
 // ── Gimmick Stats ────────────────────────────────────
 // ── Stats ─────────────────────────────────────────────
-const genres  = ['Electronic', 'Hip-Hop', 'Indie', 'Pop', 'R&B', 'Jazz', 'Rock', 'Ambient', 'Folk', 'Classical', 'Reggae', 'Metal']
-const artists = ['Meridon', 'The Midnight', 'Bicep', 'Caribou', 'Four Tet', 'Bonobo', 'Tycho', 'Nils Frahm']
-const rand    = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-
 const stats = ref({
-  minsWeek:      rand(42, 340),
-  streaksWeek:   rand(1, 7),
-  songsWeek:     rand(8, 120),
-  topArtist:     artists[rand(0, artists.length - 1)],
-  countriesHeard:rand(2, 18),
-  topGenre:      genres[rand(0, genres.length - 1)],
+  minsWeek:       null,
+  streaksWeek:    null,
+  songsWeek:      null,
+  topArtist:      null,
+  countriesHeard: null,
+  topGenre:       null,
 })
 
 async function loadStats() {
@@ -329,12 +331,12 @@ async function loadStats() {
     if (!res.ok) return
     const data = await res.json()
     stats.value = {
-      minsWeek:       data.minsWeek      ?? stats.value.minsWeek,
-      streaksWeek:    data.streak        ?? stats.value.streaksWeek,
-      songsWeek:      data.streamsWeek   ?? stats.value.songsWeek,
-      topArtist:      data.topArtist     || stats.value.topArtist,
-      countriesHeard: data.countriesHeard ?? stats.value.countriesHeard,
-      topGenre:       data.topGenre      || stats.value.topGenre,
+      minsWeek:       data.minsWeek      ?? 0,
+      streaksWeek:    data.streak        ?? 0,
+      songsWeek:      data.streamsWeek   ?? 0,
+      topArtist:      data.topArtist     || null,
+      countriesHeard: data.countriesHeard ?? 0,
+      topGenre:       data.topGenre      || null,
     }
   } catch {}
 }
@@ -622,6 +624,7 @@ function onWheelCancel() { wheelOpen.value = false }
 .stat-unit { font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: #ff5a32; margin-top: -2px; }
 .stat-label { font-size: 0.65rem; color: rgba(240,237,230,0.3); margin-top: 2px; }
 .stat-emoji { font-size: 1.4rem; line-height: 1; }
+.stat-card--empty { opacity: 0.4; justify-content: center; }
 .stat-top-artist { display: flex; align-items: center; gap: 0.6rem; }
 .sta-icon { font-size: 1.2rem; color: rgba(255,90,50,0.5); flex-shrink: 0; }
 @keyframes shimmer { 0%,100%{opacity:1}50%{opacity:0.4} }
