@@ -1075,9 +1075,15 @@ app.get('/api/stats/me', async (req, res) => {
 // POST /api/streams — log a play
 app.post('/api/streams', async (req, res) => {
   const user = await getUserFromToken(req)
-  const { songId, songName, artist } = req.body
+  const { songId, songName, artist, durationSecs } = req.body
   if (!songId) return res.status(400).json({ error: 'songId fehlt' })
-  await sb.from('streams').insert({ song_id: String(songId), song_name: songName || null, artist: artist || null, user_id: user?.id || null })
+  await sb.from('streams').insert({
+    song_id:       String(songId),
+    song_name:     songName    || null,
+    artist:        artist      || null,
+    user_id:       user?.id    || null,
+    duration_secs: durationSecs || null,
+  })
   res.json({ ok: true })
 })
 
@@ -1102,6 +1108,8 @@ app.get('/api/stats/me', async (req, res) => {
     { data: artistData },
     { data: countriesData },
     { data: streakData },
+    { data: durationWeekData },
+    { data: durationTotalData },
   ] = await Promise.all([
     sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid),
     sb.from('streams').select('*', { count: 'exact', head: true }).eq('user_id', uid).gte('played_at', weekStart.toISOString()),
@@ -1114,6 +1122,8 @@ app.get('/api/stats/me', async (req, res) => {
     sb.from('streams').select('artist').eq('user_id', uid).not('artist', 'is', null).limit(500),
     sb.from('radio_listeners').select('country').eq('user_id', uid),
     sb.from('streams').select('played_at').eq('user_id', uid).order('played_at', { ascending: false }).limit(30),
+    sb.from('streams').select('duration_secs').eq('user_id', uid).gte('played_at', weekStart.toISOString()).not('duration_secs', 'is', null),
+    sb.from('streams').select('duration_secs').eq('user_id', uid).not('duration_secs', 'is', null),
   ])
 
   // Top genre this week
@@ -1152,16 +1162,24 @@ app.get('/api/stats/me', async (req, res) => {
     }
   }
 
+  // Calculate actual minutes from duration_secs, fall back to 3.5min estimate
+  const minsWeek  = durationWeekData?.length
+    ? Math.round(durationWeekData.reduce((s, r) => s + (r.duration_secs || 210), 0) / 60)
+    : Math.round((streamsWeek  || 0) * 3.5)
+  const minsTotal = durationTotalData?.length
+    ? Math.round(durationTotalData.reduce((s, r) => s + (r.duration_secs || 210), 0) / 60)
+    : Math.round((streamsTotal || 0) * 3.5)
+
   res.json({
-    streamsTotal:  streamsTotal  || 0,
-    streamsWeek:   streamsWeek   || 0,
-    minsWeek:      Math.round((streamsWeek  || 0) * 3.5),
-    minsTotal:     Math.round((streamsTotal || 0) * 3.5),
-    favCount:      favCount      || 0,
-    playlistCount: playlistCount || 0,
-    commentCount:  commentCount  || 0,
-    uploadCount:   uploadCount   || 0,
-    likeCount:     likeCount     || 0,
+    streamsTotal:   streamsTotal   || 0,
+    streamsWeek:    streamsWeek    || 0,
+    minsWeek,
+    minsTotal,
+    favCount:       favCount       || 0,
+    playlistCount:  playlistCount  || 0,
+    commentCount:   commentCount   || 0,
+    uploadCount:    uploadCount    || 0,
+    likeCount:      likeCount      || 0,
     topGenre,
     topArtist,
     streak,

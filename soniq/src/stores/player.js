@@ -90,13 +90,41 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  let _streamTimer   = null  // fires after 30s to log the stream
+  let _streamLogged  = false // prevent double-logging per song
+
+  function cancelStreamTimer() {
+    if (_streamTimer) { clearTimeout(_streamTimer); _streamTimer = null }
+    _streamLogged = false
+  }
+
+  function startStreamTimer(song) {
+    cancelStreamTimer()
+    _streamTimer = setTimeout(() => {
+      if (_streamLogged) return
+      _streamLogged = true
+      // Send full song duration (or current duration if known) as listened_seconds
+      const listenedSecs = Math.round(getAudio()?.duration || 0)
+      fetch(`${BASE_URL}/api/streams`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          songId:         song.id,
+          songName:       song.name,
+          artist:         song.artist,
+          durationSecs:   listenedSecs,
+        }),
+      }).catch(() => {})
+    }, 30_000)
+  }
+
   function play(song) {
-    stopRadioMirror()  // clears isRadioMode too
-    // Stop any running radio audio
+    cancelStreamTimer()
+    stopRadioMirror()
     if (radioState.audio) {
       radioState.audio.pause()
-      radioState.audio = null
-      radioState.song  = null
+      radioState.audio       = null
+      radioState.song        = null
       radioState.isRadioMode = false
     }
     const audio = getAudio()
@@ -110,16 +138,13 @@ export const usePlayerStore = defineStore('player', () => {
     audio.src         = song.url
     audio.load()
 
-    // Log stream (fire & forget)
-    fetch(`${BASE_URL}/api/streams`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ songId: song.id, songName: song.name, artist: song.artist }),
-    }).catch(() => {})
-
     const tryPlay = () => {
       audio.play()
-        .then(() => { isPlaying.value = true; isLoading.value = false })
+        .then(() => {
+          isPlaying.value = true
+          isLoading.value = false
+          startStreamTimer(song)  // start 30s timer once playback begins
+        })
         .catch(e => {
           console.error('Playback error:', e, 'URL:', song.url)
           error.value     = 'Wiedergabe fehlgeschlagen. Prüfe die Serververbindung.'
@@ -128,8 +153,7 @@ export const usePlayerStore = defineStore('player', () => {
         })
     }
     audio.addEventListener('canplay', tryPlay, { once: true })
-    // Fallback timeout
-    setTimeout(() => { if (isLoading.value) { tryPlay(); } }, 3000)
+    setTimeout(() => { if (isLoading.value) { tryPlay() } }, 3000)
   }
 
   // Keep for backwards compat but simplified — no longer used for radio
@@ -140,8 +164,16 @@ export const usePlayerStore = defineStore('player', () => {
   function togglePlay() {
     const audio = getAudio()
     if (!currentSong.value) { if (songs.value.length) play(songs.value[0]); return }
-    if (isPlaying.value) { audio.pause(); isPlaying.value = false }
-    else { audio.play().then(() => { isPlaying.value = true }).catch(() => {}) }
+    if (isPlaying.value) {
+      audio.pause()
+      isPlaying.value = false
+      cancelStreamTimer()  // paused before 30s — don't count
+    } else {
+      audio.play().then(() => {
+        isPlaying.value = true
+        startStreamTimer(currentSong.value)  // restart timer on resume
+      }).catch(() => {})
+    }
   }
 
   function seek(time) {
