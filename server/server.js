@@ -70,6 +70,27 @@ app.use('/api/auth', authLimiter)
 app.use('/api/upload', uploadLimiter)
 app.use('/api', apiLimiter)
 
+// ── Input Validation ──────────────────────────────────
+function validate(body, rules) {
+  for (const [field, checks] of Object.entries(rules)) {
+    const value = body[field]
+    if (checks.required) {
+      if (value === undefined || value === null || (typeof value === 'string' && !value.trim())) {
+        return (checks.label || field) + ' fehlt'
+      }
+    }
+    if (value !== undefined && value !== null && typeof value === 'string') {
+      if (checks.maxLength && value.length > checks.maxLength) {
+        return (checks.label || field) + ` maximal ${checks.maxLength} Zeichen`
+      }
+      if (checks.pattern && !checks.pattern.test(value)) {
+        return (checks.label || field) + ' ungültiges Format'
+      }
+    }
+  }
+  return null
+}
+
 // ── Supabase ───────────────────────────────────────────
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://jodlwspmkwhparwinttz.supabase.co'
 const SUPABASE_KEY = process.env.SUPABASE_KEY || 'YOUR_SERVICE_ROLE_KEY'
@@ -282,6 +303,13 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const mp3File   = req.files?.mp3?.[0]
   const coverFile = req.files?.cover?.[0]
+  const errV = validate(req.body, {
+    title:  { maxLength: 200 },
+    artist: { maxLength: 100 },
+    genre:  { maxLength: 50 },
+  })
+  if (errV) return res.status(400).json({ error: errV })
+  if (mp3File && !mp3File.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'Ungültiges MP3-Format' })
   const title     = req.body.title?.trim()
   const artist    = req.body.artist?.trim() || user.username
   const country   = req.body.country?.trim()
@@ -326,6 +354,8 @@ app.patch('/api/songs/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), asy
   if (!song) return res.status(404).json({ error: 'Song nicht gefunden' })
   if (!user.is_admin && user.username.toLowerCase() !== song.artist.toLowerCase())
     return res.status(403).json({ error: 'Keine Berechtigung' })
+  const errV = validate(req.body, { title: { maxLength: 200 } })
+  if (errV) return res.status(400).json({ error: errV })
   const updates = {}
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
@@ -346,6 +376,8 @@ app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), as
   if (!album) return res.status(404).json({ error: 'Album nicht gefunden' })
   if (!user.is_admin && user.username.toLowerCase() !== album.artist.toLowerCase())
     return res.status(403).json({ error: 'Keine Berechtigung' })
+  const errV = validate(req.body, { title: { maxLength: 200 } })
+  if (errV) return res.status(400).json({ error: errV })
   const updates = {}
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
@@ -409,6 +441,8 @@ app.post('/api/playlists', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { name, icon, color } = req.body
   if (!name?.trim()) return res.status(400).json({ error: 'Name required' })
+  const errV = validate(req.body, { name: { maxLength: 100 } })
+  if (errV) return res.status(400).json({ error: errV })
   const { data, error } = await sb.from('playlists').insert({ id: Date.now().toString(), user_id: user.id, name: name.trim(), icon: icon || '▤', color: color || '#5b6aff' }).select().single()
   if (error) return res.status(500).json({ error: error.message })
   res.status(201).json({ ...data, songs: [] })
@@ -471,6 +505,11 @@ app.get('/api/auth/me', async (req, res) => {
 app.post('/api/auth/register', async (req, res) => {
   const { username, email, password } = req.body
   if (!username?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Alle Felder sind erforderlich.' })
+  const errV = validate({ username: username?.trim(), email: email?.trim() }, {
+    username: { maxLength: 50 },
+    email:    { pattern: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, label: 'E-Mail' },
+  })
+  if (errV) return res.status(400).json({ error: errV })
   if (username.trim().toLowerCase() === 'admin') return res.status(400).json({ error: 'Benutzername nicht erlaubt.' })
   const { data: existU } = await sb.from('users').select('id').eq('username', username.trim()).single()
   if (existU) return res.status(409).json({ error: 'Benutzername bereits vergeben.' })
@@ -669,6 +708,8 @@ app.patch('/api/auth/profile', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt.' })
   const { bio, isPublic, avatar } = req.body
+  const errV = validate(req.body, { bio: { maxLength: 1000 } })
+  if (errV) return res.status(400).json({ error: errV })
   const updates = {}
   if (bio      !== undefined) updates.bio       = bio
   if (isPublic !== undefined) updates.is_public = isPublic
@@ -755,6 +796,8 @@ app.post('/api/groups', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { name, icon, color } = req.body
   if (!name?.trim()) return res.status(400).json({ error: 'Name erforderlich' })
+  const errV = validate(req.body, { name: { maxLength: 100 } })
+  if (errV) return res.status(400).json({ error: errV })
   const id = Date.now().toString()
   const { data: group } = await sb.from('groups').insert({ id, name: name.trim(), icon: icon || '⬡', color: color || '#32c8a0', host_id: me.id }).select().single()
   await sb.from('group_members').insert({ group_id: id, user_id: me.id })
@@ -795,6 +838,8 @@ app.post('/api/messages', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { toId, groupId, text, songId, songName, songArtist } = req.body
   if (!text && !songId) return res.status(400).json({ error: 'Text oder Song erforderlich' })
+  const errV = validate(req.body, { text: { maxLength: 5000 } })
+  if (errV) return res.status(400).json({ error: errV })
   const { data } = await sb.from('messages').insert({ id: Date.now().toString(), from_id: me.id, from_name: me.username, from_avatar: me.avatar || null, to_id: toId || null, group_id: groupId || null, text: text || null, song_id: songId || null, song_name: songName || null, song_artist: songArtist || null }).select().single()
   res.status(201).json(data)
 })
@@ -840,6 +885,8 @@ app.post('/api/search/history', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const query = req.body.query?.trim()
   if (!query) return res.status(400).json({ error: 'Query fehlt' })
+  const errV = validate(req.body, { query: { maxLength: 200 } })
+  if (errV) return res.status(400).json({ error: errV })
   // Delete duplicate if exists
   await sb.from('search_history').delete().eq('user_id', user.id).ilike('query', query)
   // Insert new entry
@@ -937,6 +984,12 @@ app.post('/api/albums', upload.fields([
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
 
+  const errV = validate(req.body, {
+    title:  { required: true, maxLength: 200 },
+    artist: { maxLength: 100 },
+    country: { required: true },
+  })
+  if (errV) return res.status(400).json({ error: errV })
   const title      = req.body.title?.trim()
   const artist     = req.body.artist?.trim() || user.username
   const country    = req.body.country?.trim()
@@ -1077,6 +1130,11 @@ app.post('/api/streams', async (req, res) => {
   const user = await getUserFromToken(req)
   const { songId, songName, artist, durationSecs } = req.body
   if (!songId) return res.status(400).json({ error: 'songId fehlt' })
+  const errV = validate(req.body, {
+    songName: { maxLength: 200 },
+    artist:   { maxLength: 100 },
+  })
+  if (errV) return res.status(400).json({ error: errV })
   await sb.from('streams').insert({
     song_id:       String(songId),
     song_name:     songName    || null,
@@ -1320,6 +1378,8 @@ app.post('/api/support/ticket', async (req, res) => {
   }
   const { text } = req.body
   if (!text?.trim()) return res.status(400).json({ error: 'Nachricht fehlt' })
+  const errV = validate(req.body, { text: { maxLength: 5000 } })
+  if (errV) return res.status(400).json({ error: errV })
   const { data: msg } = await sb.from('support_messages').insert({ ticket_id: ticket.id, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
   res.status(201).json(msg)
 })
@@ -1329,6 +1389,8 @@ app.post('/api/support/ticket/:ticketId/reply', async (req, res) => {
   if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
   const { text } = req.body
   if (!text?.trim()) return res.status(400).json({ error: 'Nachricht fehlt' })
+  const errV2 = validate(req.body, { text: { maxLength: 5000 } })
+  if (errV2) return res.status(400).json({ error: errV2 })
   const { data: msg } = await sb.from('support_messages').insert({ ticket_id: req.params.ticketId, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
   res.status(201).json(msg)
 })
@@ -1363,6 +1425,8 @@ app.post('/api/donations/create-payment-intent', async (req, res) => {
   const { amount, message, artistId } = req.body
   if (!amount || amount < 1)   return res.status(400).json({ error: 'Ungültiger Betrag' })
   if (amount > 999)             return res.status(400).json({ error: 'Maximalbetrag: 999€' })
+  const errV = validate(req.body, { message: { maxLength: 1000 } })
+  if (errV) return res.status(400).json({ error: errV })
 
   const FRONTEND = process.env.FRONTEND_URL || 'https://nyujam.com'
 
