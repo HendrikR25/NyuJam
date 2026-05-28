@@ -1069,62 +1069,6 @@ app.delete('/api/albums/:id', async (req, res) => {
 })
 
 // ── Streams ────────────────────────────────────────────
-// GET /api/stats/me — fun personal stats for home dashboard
-app.get('/api/stats/me', async (req, res) => {
-  const user = await getUserFromToken(req)
-  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
-
-  const uid = user.id
-  const now = new Date()
-  const weekStart = new Date(now)
-  weekStart.setUTCDate(now.getUTCDate() - now.getUTCDay())
-  weekStart.setUTCHours(0,0,0,0)
-
-  const [
-    { count: streamsTotal },
-    { count: streamsWeek },
-    { count: favCount },
-    { count: playlistCount },
-    { count: commentCount },
-    { count: uploadCount },
-    { count: likeCount },
-    { data: topArtistData },
-  ] = await Promise.all([
-    sb.from('streams').select('*', { count:'exact', head:true }).eq('user_id', uid),
-    sb.from('streams').select('*', { count:'exact', head:true }).eq('user_id', uid).gte('created_at', weekStart.toISOString()),
-    sb.from('favorites').select('*', { count:'exact', head:true }).eq('user_id', uid),
-    sb.from('playlists').select('*', { count:'exact', head:true }).eq('user_id', uid),
-    sb.from('song_comments').select('*', { count:'exact', head:true }).eq('user_id', uid),
-    sb.from('songs_meta').select('*', { count:'exact', head:true }).eq('uploaded_by', uid),
-    sb.from('radio_likes').select('*', { count:'exact', head:true }).eq('user_id', uid),
-    sb.from('streams').select('artist').eq('user_id', uid).not('artist', 'is', null).limit(200),
-  ])
-
-  // Most listened artist
-  const artistCounts = {}
-  for (const r of topArtistData || []) {
-    if (r.artist) artistCounts[r.artist] = (artistCounts[r.artist] || 0) + 1
-  }
-  const topArtist = Object.entries(artistCounts).sort((a,b) => b[1]-a[1])[0]?.[0] || null
-
-  // Estimated minutes (avg song ~3.5 min)
-  const minsTotal = Math.round((streamsTotal || 0) * 3.5)
-  const minsWeek  = Math.round((streamsWeek  || 0) * 3.5)
-
-  res.json({
-    streamsTotal: streamsTotal || 0,
-    streamsWeek:  streamsWeek  || 0,
-    minsTotal,
-    minsWeek,
-    favCount:     favCount     || 0,
-    playlistCount:playlistCount|| 0,
-    commentCount: commentCount || 0,
-    uploadCount:  uploadCount  || 0,
-    likeCount:    likeCount    || 0,
-    topArtist,
-  })
-})
-
 // POST /api/streams — log a play
 app.post('/api/streams', async (req, res) => {
   const user = await getUserFromToken(req)
