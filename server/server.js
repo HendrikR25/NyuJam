@@ -39,29 +39,115 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }))
 
 // ── Rate Limiting ──────────────────────────────────────
-// Streng für Auth-Endpoints (Login/Register)
+
+// Key generator: uses auth token for logged-in users, IP for guests.
+// This ensures user-based limits survive IP changes (e.g. VPN/proxy).
+function tokenKey(req) {
+  const tok = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  return tok ? `tok:${tok}` : `ip:${req.ip}`
+}
+
+// Auth endpoints (login/register) — strict per IP
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 Minuten
-  max: 20,                    // max 20 Versuche pro IP
+  windowMs: 15 * 60 * 1000,
+  max: 15,
   message: { error: 'Zu viele Anfragen. Bitte warte 15 Minuten.' },
   standardHeaders: true,
   legacyHeaders: false,
 })
 
-// Locker für allgemeine API-Anfragen
+// Email-sending endpoints (register, forgot-password) — very strict per IP
+// to prevent email spam/abuse
+const emailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  message: { error: 'Zu viele E-Mail-Anfragen. Bitte warte eine Stunde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// General API — loose per IP
 const apiLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,   // 1 Minute
-  max: 100,                   // max 100 Anfragen pro IP
+  windowMs: 1 * 60 * 1000,
+  max: 100,
   message: { error: 'Zu viele Anfragen. Bitte kurz warten.' },
   standardHeaders: true,
   legacyHeaders: false,
 })
 
-// Streng für Upload
+// Upload — strict per IP
 const uploadLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000,  // 1 Stunde
-  max: 20,                    // max 20 Uploads pro Stunde
+  windowMs: 60 * 60 * 1000,
+  max: 20,
   message: { error: 'Upload-Limit erreicht. Bitte warte eine Stunde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Payment/donation creation — per IP; prevents churning payment sessions
+const donationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Zu viele Zahlungsanfragen. Bitte warte eine Stunde.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Stream logging — user-keyed to prevent play-count inflation
+const streamLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: tokenKey,
+  message: { error: 'Zu viele Stream-Anfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Comment posting — user-keyed anti-spam
+const commentPostLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  keyGenerator: tokenKey,
+  message: { error: 'Zu viele Kommentare. Bitte warte etwas.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Direct messages — user-keyed anti-spam
+const messageLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyGenerator: tokenKey,
+  message: { error: 'Zu viele Nachrichten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Friend requests — user-keyed to prevent mass-request spam
+const friendRequestLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 20,
+  keyGenerator: tokenKey,
+  message: { error: 'Zu viele Freundschaftsanfragen.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Radio session chat — user-keyed anti-spam
+const chatLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyGenerator: tokenKey,
+  message: { error: 'Zu viele Chat-Nachrichten.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+})
+
+// Radio next/advance — prevents rapid queue manipulation affecting all listeners
+const radioNextLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  message: { error: 'Zu viele Radio-Anfragen.' },
   standardHeaders: true,
   legacyHeaders: false,
 })
@@ -502,7 +588,7 @@ app.get('/api/auth/me', async (req, res) => {
   res.json({ user: safeUser(user) })
 })
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', emailLimiter, async (req, res) => {
   const { username, email, password } = req.body
   if (!username?.trim() || !email?.trim() || !password) return res.status(400).json({ error: 'Alle Felder sind erforderlich.' })
   const errV = validate({ username: username?.trim(), email: email?.trim() }, {
@@ -556,7 +642,7 @@ app.get('/api/auth/verify-email', async (req, res) => {
 })
 
 // POST /api/auth/forgot-password
-app.post('/api/auth/forgot-password', async (req, res) => {
+app.post('/api/auth/forgot-password', emailLimiter, async (req, res) => {
   const { email } = req.body
   if (!email) return res.status(400).json({ error: 'E-Mail fehlt' })
   const { data: user } = await sb.from('users').select('*').ilike('email', email.trim()).single()
@@ -752,7 +838,7 @@ app.get('/api/friends', async (req, res) => {
   res.json({ friends, pending })
 })
 
-app.post('/api/friends/request', async (req, res) => {
+app.post('/api/friends/request', friendRequestLimiter, async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { username } = req.body
@@ -833,7 +919,7 @@ app.get('/api/messages/:targetId', async (req, res) => {
   res.json(data || [])
 })
 
-app.post('/api/messages', async (req, res) => {
+app.post('/api/messages', messageLimiter, async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { toId, groupId, text, songId, songName, songArtist } = req.body
@@ -1070,7 +1156,7 @@ app.delete('/api/albums/:id', async (req, res) => {
 
 // ── Streams ────────────────────────────────────────────
 // POST /api/streams — log a play
-app.post('/api/streams', async (req, res) => {
+app.post('/api/streams', streamLimiter, async (req, res) => {
   const user = await getUserFromToken(req)
   const { songId, songName, artist, durationSecs } = req.body
   if (!songId) return res.status(400).json({ error: 'songId fehlt' })
@@ -1365,7 +1451,7 @@ app.patch('/api/support/ticket/resolve', async (req, res) => {
 // POST /api/donations/create-payment-intent
 // If artistId is given → pay directly to artist's Stripe Connect account
 // If no artistId → pay to NyuJam platform account
-app.post('/api/donations/create-payment-intent', async (req, res) => {
+app.post('/api/donations/create-payment-intent', donationLimiter, async (req, res) => {
   const { amount, message, artistId } = req.body
   if (!amount || amount < 1)   return res.status(400).json({ error: 'Ungültiger Betrag' })
   if (amount > 999)             return res.status(400).json({ error: 'Maximalbetrag: 999€' })
@@ -1557,7 +1643,7 @@ app.get('/api/comments/:songId', async (req, res) => {
   res.json(result)
 })
 
-app.post('/api/comments/:songId', async (req, res) => {
+app.post('/api/comments/:songId', commentPostLimiter, async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const songId = req.params.songId.replace(/^u_/, '')
@@ -1757,7 +1843,7 @@ app.get('/api/radio/country/:code', async (req, res) => {
 })
 
 // POST /api/radio/country/:code/next — advance to next song (called by client when song ends)
-app.post('/api/radio/country/:code/next', async (req, res) => {
+app.post('/api/radio/country/:code/next', radioNextLimiter, async (req, res) => {
   const country = req.params.code.toUpperCase()
   const state   = await getCountryState(country)
   // Only advance if the requesting song matches current (prevents race conditions)
@@ -1918,7 +2004,7 @@ app.get('/api/radio/continent/:code', async (req, res) => {
   })
 })
 
-app.post('/api/radio/continent/:code/next', async (req, res) => {
+app.post('/api/radio/continent/:code/next', radioNextLimiter, async (req, res) => {
   const continent = req.params.code.toLowerCase()
   const song = await advanceContinentSong(continent)
   res.json({ song })
@@ -2040,7 +2126,7 @@ app.get('/api/radio/global', async (req, res) => {
   res.json({ current, weekend, weekStart, top50: top50 || [], startedAt: state?.song_started_at })
 })
 
-app.post('/api/radio/global/next', async (req, res) => {
+app.post('/api/radio/global/next', radioNextLimiter, async (req, res) => {
   const song = await advanceGlobalSong()
   res.json({ song })
 })
@@ -2338,7 +2424,7 @@ app.post('/api/radio/sessions/:id/vote', async (req, res) => {
   res.json({ ...data, skipped })
 })
 
-app.post('/api/radio/sessions/:id/chat', async (req, res) => {
+app.post('/api/radio/sessions/:id/chat', chatLimiter, async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: s } = await sb.from('radio_sessions').select('chat_messages').eq('id', req.params.id).single()
