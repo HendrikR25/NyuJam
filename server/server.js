@@ -29,7 +29,7 @@ app.use(cors({
   origin: [
     'http://localhost:5173',
     'http://localhost:4173',
-    /\.vercel\.app$/,
+    /^https:\/\/nyujam[a-z0-9-]*\.vercel\.app$/,
     'https://nyujam.com',
     'https://www.nyujam.com',
     process.env.FRONTEND_URL || '',
@@ -271,7 +271,7 @@ async function deleteFromR2(key) {
 }
 
 // ── Auth helpers ───────────────────────────────────────
-function simpleToken(id) { return Buffer.from(`${id}:${Date.now()}`).toString('base64') }
+function simpleToken() { return crypto.randomBytes(32).toString('hex') }
 
 async function getUserFromToken(req) {
   const tok = (req.headers.authorization || '').replace('Bearer ', '')
@@ -282,7 +282,7 @@ async function getUserFromToken(req) {
 
 function safeUser(u) {
   if (!u) return null
-  const { password, token, ...rest } = u
+  const { password, token, reset_token, reset_token_expires, verify_token, ...rest } = u
   return rest
 }
 
@@ -301,6 +301,7 @@ app.get('/api/songs', (req, res) => {
 
 app.get('/music/:filename', (req, res) => {
   const filePath = path.join(MUSIC_DIR, req.params.filename)
+  if (!path.resolve(filePath).startsWith(path.resolve(MUSIC_DIR) + path.sep)) return res.status(403).send('Forbidden')
   if (!fs.existsSync(filePath)) return res.status(404).send('Not found')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Headers', 'Range')
@@ -430,6 +431,8 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
   })
   if (errV) return res.status(400).json({ error: errV })
   if (mp3File && !mp3File.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'Ungültiges MP3-Format' })
+  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (coverFile && !ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
   const title     = req.body.title?.trim()
   const artist    = req.body.artist?.trim() || user.username
   const country   = req.body.country?.trim()
@@ -461,7 +464,7 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
     res.status(201).json(data)
   } catch (err) {
     console.error('Upload error:', err.message)
-    res.status(500).json({ error: `Upload fehlgeschlagen: ${err.message}` })
+    res.status(500).json({ error: 'Upload fehlgeschlagen.' })
   }
 })
 
@@ -472,7 +475,7 @@ app.patch('/api/songs/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), asy
   const rawId = req.params.id.replace(/^u_/, '')
   const { data: song } = await sb.from('songs_meta').select('*').eq('id', rawId).single()
   if (!song) return res.status(404).json({ error: 'Song nicht gefunden' })
-  if (!user.is_admin && user.username.toLowerCase() !== song.artist.toLowerCase())
+  if (!user.is_admin && user.id !== song.uploaded_by)
     return res.status(403).json({ error: 'Keine Berechtigung' })
   const errV = validate(req.body, { title: { maxLength: 200 } })
   if (errV) return res.status(400).json({ error: errV })
@@ -480,6 +483,8 @@ app.patch('/api/songs/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), asy
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
     const coverFile = req.files.cover[0]
+    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
     const coverKey  = `covers/${rawId}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
     updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     if (song.cover_url) deleteFromR2(decodeURIComponent(song.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
@@ -494,7 +499,7 @@ app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), as
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: album } = await sb.from('albums').select('*').eq('id', req.params.id).single()
   if (!album) return res.status(404).json({ error: 'Album nicht gefunden' })
-  if (!user.is_admin && user.username.toLowerCase() !== album.artist.toLowerCase())
+  if (!user.is_admin && user.id !== album.uploaded_by)
     return res.status(403).json({ error: 'Keine Berechtigung' })
   const errV = validate(req.body, { title: { maxLength: 200 } })
   if (errV) return res.status(400).json({ error: errV })
@@ -502,6 +507,8 @@ app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), as
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
     const coverFile = req.files.cover[0]
+    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+    if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
     const coverKey  = `covers/album-${req.params.id}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
     updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     if (album.cover_url) deleteFromR2(decodeURIComponent(album.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
@@ -532,7 +539,7 @@ app.delete('/api/songs/:id', async (req, res) => {
   const rawId = req.params.id.replace(/^u_/, '')
   const { data: song } = await sb.from('songs_meta').select('*').eq('id', rawId).single()
   if (!song) return res.status(404).json({ error: 'Song nicht gefunden' })
-  if (!user.is_admin && user.username.toLowerCase() !== song.artist.toLowerCase())
+  if (!user.is_admin && user.id !== song.uploaded_by)
     return res.status(403).json({ error: 'Keine Berechtigung.' })
   const deletePromises = []
   if (song.mp3_url)   deletePromises.push(deleteFromR2(decodeURIComponent(song.mp3_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(e => console.error('R2 MP3 delete:', e.message)))
@@ -551,8 +558,10 @@ app.get('/api/playlists', async (req, res) => {
 })
 
 app.get('/api/playlists/:id', async (req, res) => {
+  const user = await getUserFromToken(req)
   const { data } = await sb.from('playlists').select('*, playlist_songs(*)').eq('id', req.params.id).single()
   if (!data) return res.status(404).json({ error: 'Not found' })
+  if (data.user_id !== user?.id) return res.status(403).json({ error: 'Keine Berechtigung' })
   res.json({ ...data, songs: data.playlist_songs || [] })
 })
 
@@ -568,7 +577,7 @@ app.post('/api/playlists', async (req, res) => {
   if (errV) return res.status(400).json({ error: errV })
   const { name, icon, color } = body
   const { data, error } = await sb.from('playlists').insert({ id: Date.now().toString(), user_id: user.id, name: name.trim(), icon: icon || '▤', color: color || '#5b6aff' }).select().single()
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: 'Playlist konnte nicht erstellt werden.' })
   res.status(201).json({ ...data, songs: [] })
 })
 
@@ -582,6 +591,8 @@ app.delete('/api/playlists/:id', async (req, res) => {
 app.post('/api/playlists/:id/songs', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: playlist } = await sb.from('playlists').select('user_id').eq('id', req.params.id).single()
+  if (!playlist || playlist.user_id !== user.id) return res.status(403).json({ error: 'Keine Berechtigung' })
   const body = pick(req.body, ['songId', 'name', 'artist'])
   const errV = validate(body, {
     songId: { required: true, type: 'string', maxLength: 100, label: 'Song-ID' },
@@ -598,6 +609,10 @@ app.post('/api/playlists/:id/songs', async (req, res) => {
 })
 
 app.delete('/api/playlists/:id/songs/:songId', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
+  const { data: playlist } = await sb.from('playlists').select('user_id').eq('id', req.params.id).single()
+  if (!playlist || playlist.user_id !== user.id) return res.status(403).json({ error: 'Keine Berechtigung' })
   await sb.from('playlist_songs').delete().eq('playlist_id', req.params.id).eq('song_id', req.params.songId)
   res.json({ ok: true })
 })
@@ -652,7 +667,7 @@ app.post('/api/auth/register', emailLimiter, async (req, res) => {
   if (errV) return res.status(400).json({ error: errV })
   const RESERVED = ['admin', 'support', 'moderator', 'nyujam', 'system']
   if (RESERVED.includes(username.trim().toLowerCase())) return res.status(400).json({ error: 'Benutzername nicht erlaubt.' })
-  const { data: existU } = await sb.from('users').select('id').eq('username', username.trim()).single()
+  const { data: existU } = await sb.from('users').select('id').ilike('username', username.trim()).single()
   if (existU) return res.status(409).json({ error: 'Benutzername bereits vergeben.' })
   const { data: existE } = await sb.from('users').select('id').eq('email', email.trim().toLowerCase()).single()
   if (existE) return res.status(409).json({ error: 'E-Mail bereits registriert.' })
@@ -665,7 +680,7 @@ app.post('/api/auth/register', emailLimiter, async (req, res) => {
     password: hashedPassword, bio: '', is_public: true, is_admin: false,
     token, is_verified: false, verify_token,
   }).select().single()
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: 'Registrierung fehlgeschlagen.' })
 
   // Send verification email
   const verifyUrl = `${process.env.FRONTEND_URL || 'https://nyujam.com'}/verify-email?token=${verify_token}`
@@ -738,7 +753,8 @@ app.post('/api/auth/reset-password', async (req, res) => {
   if (!user) return res.status(400).json({ error: 'Ungültiger oder abgelaufener Link.' })
   if (new Date(user.reset_token_expires) < new Date()) return res.status(400).json({ error: 'Link abgelaufen. Bitte erneut anfordern.' })
   const hashedPassword = await bcrypt.hash(password, 10)
-  await sb.from('users').update({ password: hashedPassword, reset_token: null, reset_token_expires: null }).eq('id', user.id)
+  const newToken = simpleToken()
+  await sb.from('users').update({ password: hashedPassword, reset_token: null, reset_token_expires: null, token: newToken }).eq('id', user.id)
   res.json({ ok: true, message: 'Passwort erfolgreich geändert.' })
 })
 
@@ -755,8 +771,9 @@ app.post('/api/auth/change-password', async (req, res) => {
   const match = await bcrypt.compare(currentPassword, user.password)
   if (!match) return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
   const hashedPassword = await bcrypt.hash(newPassword, 10)
-  await sb.from('users').update({ password: hashedPassword }).eq('id', user.id)
-  res.json({ ok: true })
+  const newToken = simpleToken()
+  await sb.from('users').update({ password: hashedPassword, token: newToken }).eq('id', user.id)
+  res.json({ ok: true, token: newToken })
 })
 
 // DELETE /api/auth/account — permanently delete account and all user data (DSGVO Art. 17)
@@ -813,9 +830,9 @@ app.delete('/api/auth/account', async (req, res) => {
     await sb.from('streams').delete().eq('user_id', uid)
     await sb.from('search_history').delete().eq('user_id', uid)
     await sb.from('favorites').delete().eq('user_id', uid)
-    await sb.from('messages').delete().eq('sender_id', uid)
+    await sb.from('messages').delete().eq('from_id', uid)
     await sb.from('group_members').delete().eq('user_id', uid)
-    await sb.from('friendships').delete().or(`user_id.eq.${uid},friend_id.eq.${uid}`)
+    await sb.from('friendships').delete().or(`user_a.eq.${uid},user_b.eq.${uid}`)
     await sb.from('playlist_songs').delete().in('playlist_id',
       (await sb.from('playlists').select('id').eq('user_id', uid)).data?.map(p => p.id) || []
     )
@@ -873,12 +890,14 @@ app.patch('/api/auth/profile', async (req, res) => {
   })
   if (errV) return res.status(400).json({ error: errV })
   const { bio, isPublic, avatar } = body
+  if (avatar !== undefined && avatar !== '' && !/^https:\/\//i.test(avatar))
+    return res.status(400).json({ error: 'Avatar-URL muss https:// verwenden' })
   const updates = {}
   if (bio      !== undefined) updates.bio       = bio
   if (isPublic !== undefined) updates.is_public = isPublic
   if (avatar   !== undefined) updates.avatar    = avatar
   const { data, error } = await sb.from('users').update(updates).eq('id', user.id).select().single()
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: 'Profil konnte nicht aktualisiert werden.' })
   res.json({ user: safeUser(data) })
 })
 
@@ -947,7 +966,9 @@ app.post('/api/friends/:friendshipId/respond', async (req, res) => {
 app.delete('/api/friends/:userId', async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
-  await sb.from('friendships').delete().or(`and(user_a.eq.${me.id},user_b.eq.${req.params.userId}),and(user_a.eq.${req.params.userId},user_b.eq.${me.id})`)
+  if (!/^\d+$/.test(req.params.userId)) return res.status(400).json({ error: 'Ungültige Benutzer-ID' })
+  await sb.from('friendships').delete().eq('user_a', me.id).eq('user_b', req.params.userId)
+  await sb.from('friendships').delete().eq('user_a', req.params.userId).eq('user_b', me.id)
   res.json({ ok: true })
 })
 
@@ -1006,10 +1027,19 @@ app.get('/api/messages/:targetId', async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { targetId } = req.params
-  const { data } = await sb.from('messages').select('*')
-    .or(`group_id.eq.${targetId},and(to_id.eq.${targetId},from_id.eq.${me.id}),and(to_id.eq.${me.id},from_id.eq.${targetId})`)
-    .order('created_at')
-  res.json(data || [])
+  const { data: group } = await sb.from('groups').select('id').eq('id', targetId).single()
+  if (group) {
+    const { data: member } = await sb.from('group_members').select('user_id').eq('group_id', targetId).eq('user_id', me.id).single()
+    if (!member) return res.status(403).json({ error: 'Keine Berechtigung' })
+    const { data } = await sb.from('messages').select('*').eq('group_id', targetId).order('created_at')
+    return res.json(data || [])
+  }
+  const [{ data: sent }, { data: received }] = await Promise.all([
+    sb.from('messages').select('*').eq('to_id', targetId).eq('from_id', me.id).order('created_at'),
+    sb.from('messages').select('*').eq('to_id', me.id).eq('from_id', targetId).order('created_at'),
+  ])
+  const combined = [...(sent || []), ...(received || [])].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+  res.json(combined)
 })
 
 app.post('/api/messages', messageLimiter, async (req, res) => {
@@ -1026,7 +1056,17 @@ app.post('/api/messages', messageLimiter, async (req, res) => {
   })
   if (errV) return res.status(400).json({ error: errV })
   const { toId, groupId, text, songId, songName, songArtist } = body
+  if (toId && !/^\d+$/.test(toId)) return res.status(400).json({ error: 'Ungültige Benutzer-ID' })
   if (!text && !songId) return res.status(400).json({ error: 'Text oder Song erforderlich' })
+  if (toId) {
+    const { data: friendship } = await sb.from('friendships').select('id').eq('status', 'accepted')
+      .or(`and(user_a.eq.${me.id},user_b.eq.${toId}),and(user_a.eq.${toId},user_b.eq.${me.id})`).single()
+    if (!friendship) return res.status(403).json({ error: 'Keine Berechtigung' })
+  }
+  if (groupId) {
+    const { data: member } = await sb.from('group_members').select('user_id').eq('group_id', groupId).eq('user_id', me.id).single()
+    if (!member) return res.status(403).json({ error: 'Keine Berechtigung' })
+  }
   const { data } = await sb.from('messages').insert({ id: Date.now().toString(), from_id: me.id, from_name: me.username, from_avatar: me.avatar || null, to_id: toId || null, group_id: groupId || null, text: text || null, song_id: songId || null, song_name: songName || null, song_artist: songArtist || null }).select().single()
   res.status(201).json(data)
 })
@@ -1107,6 +1147,8 @@ app.delete('/api/search/history', async (req, res) => {
 // GET /api/albums/artist/:name — all albums for an artist with their songs
 // GET /api/artists/search — search users who have uploaded songs (for donations)
 app.get('/api/artists/search', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const q = (req.query.q || '').trim().toLowerCase()
   if (!q || q.length > 100) return res.json([])
   const { data } = await sb.from('songs_meta')
@@ -1204,6 +1246,8 @@ app.post('/api/albums', upload.fields([
     let coverUrl = null
     if (req.files?.cover?.[0]) {
       const coverFile = req.files.cover[0]
+      const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+      if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
       const coverKey  = `covers/${albumId}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
       coverUrl = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     }
@@ -1216,6 +1260,8 @@ app.post('/api/albums', upload.fields([
     for (let i = 0; i < tracks.length; i++) {
       const mp3File = req.files?.[`mp3_${i}`]?.[0]
       if (!mp3File) continue
+      if (!['audio/mpeg', 'audio/mp3'].includes(mp3File.mimetype))
+        return res.status(400).json({ error: `Track ${i + 1}: Nur MP3-Dateien erlaubt` })
       const songId  = `${Date.now()}_${i}`
       const mp3Key  = `music/${songId}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
       const mp3Url  = await uploadToR2(mp3File.buffer, mp3Key, 'audio/mpeg')
@@ -1235,7 +1281,7 @@ app.post('/api/albums', upload.fields([
     res.status(201).json({ id: albumId, title, artist, coverUrl, tracks: songIds.length })
   } catch (err) {
     console.error('Album upload error:', err.message)
-    res.status(500).json({ error: `Upload fehlgeschlagen: ${err.message}` })
+    res.status(500).json({ error: 'Upload fehlgeschlagen.' })
   }
 })
 
@@ -1245,7 +1291,7 @@ app.delete('/api/albums/:id', async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: album } = await sb.from('albums').select('*').eq('id', req.params.id).single()
   if (!album) return res.status(404).json({ error: 'Album nicht gefunden' })
-  if (!user.is_admin && user.username.toLowerCase() !== album.artist.toLowerCase())
+  if (!user.is_admin && user.id !== album.uploaded_by)
     return res.status(403).json({ error: 'Keine Berechtigung.' })
   // Delete all songs in album from R2 + songs_meta
   const { data: albumSongs } = await sb.from('album_songs').select('songs_meta(*)').eq('album_id', req.params.id)
@@ -1387,12 +1433,16 @@ app.get('/api/stats/me', async (req, res) => {
 
 // GET /api/streams/song/:songId — stream count for one song
 app.get('/api/streams/song/:songId', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { count } = await sb.from('streams').select('*', { count: 'exact', head: true }).eq('song_id', req.params.songId)
   res.json({ songId: req.params.songId, streams: count || 0 })
 })
 
 // GET /api/streams/artist/:name — total streams for artist
 app.get('/api/streams/artist/:name', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const name = decodeURIComponent(req.params.name)
   const { count } = await sb.from('streams').select('*', { count: 'exact', head: true }).ilike('artist', name)
   res.json({ artist: name, streams: count || 0 })
@@ -1400,6 +1450,8 @@ app.get('/api/streams/artist/:name', async (req, res) => {
 
 // GET /api/streams/artist/:name/songs — per-song stream counts for artist
 app.get('/api/streams/artist/:name/songs', async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const name = decodeURIComponent(req.params.name)
   const { data } = await sb.from('streams').select('song_id, song_name').ilike('artist', name)
   const counts = {}
@@ -1462,9 +1514,10 @@ app.post('/api/subscription/cancel', async (req, res) => {
 app.post('/api/subscription/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig    = req.headers['stripe-signature']
   const secret = process.env.STRIPE_WEBHOOK_SUB_SECRET
+  if (!secret) return res.status(400).send('Webhook not configured')
   let event
   try {
-    event = secret ? stripe.webhooks.constructEvent(req.body, sig, secret) : JSON.parse(req.body)
+    event = stripe.webhooks.constructEvent(req.body, sig, secret)
   } catch { return res.status(400).send('Webhook Error') }
 
   if (event.type === 'checkout.session.completed') {
@@ -1498,7 +1551,7 @@ app.get('/api/support/ticket', async (req, res) => {
 // Support user can see all tickets
 app.get('/api/support/tickets', async (req, res) => {
   const user = await getUserFromToken(req)
-  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  if (!user || (user.username.toLowerCase() !== 'support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
   const { data: tickets } = await sb.from('support_tickets').select('*, users(username), support_messages(count)').eq('status', 'open').order('created_at', { ascending: true })
   // Add last message preview
   const result = await Promise.all((tickets || []).map(async t => {
@@ -1526,24 +1579,26 @@ app.post('/api/support/ticket', async (req, res) => {
 
 app.post('/api/support/ticket/:ticketId/reply', async (req, res) => {
   const user = await getUserFromToken(req)
-  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  if (!user || (user.username.toLowerCase() !== 'support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
   const { text } = pick(req.body, ['text'])
   const errV2 = validate({ text }, { text: { required: true, type: 'string', minLength: 1, maxLength: 5000, label: 'Nachricht' } })
   if (errV2) return res.status(400).json({ error: errV2 })
+  const { data: ticket } = await sb.from('support_tickets').select('id').eq('id', req.params.ticketId).single()
+  if (!ticket) return res.status(404).json({ error: 'Ticket nicht gefunden' })
   const { data: msg } = await sb.from('support_messages').insert({ ticket_id: req.params.ticketId, sender_id: user.id, text: text.trim() }).select('*, users(username, avatar)').single()
   res.status(201).json(msg)
 })
 
 app.get('/api/support/ticket/:ticketId/messages', async (req, res) => {
   const user = await getUserFromToken(req)
-  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  if (!user || (user.username.toLowerCase() !== 'support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
   const { data } = await sb.from('support_messages').select('*, users(username, avatar)').eq('ticket_id', req.params.ticketId).order('created_at', { ascending: true })
   res.json(data || [])
 })
 
 app.patch('/api/support/ticket/:ticketId/resolve', async (req, res) => {
   const user = await getUserFromToken(req)
-  if (!user || (user.username !== 'Support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
+  if (!user || (user.username.toLowerCase() !== 'support' && !user.is_admin)) return res.status(403).json({ error: 'Keine Berechtigung' })
   await sb.from('support_tickets').update({ status: 'resolved' }).eq('id', req.params.ticketId)
   res.json({ ok: true })
 })
@@ -1561,6 +1616,8 @@ app.patch('/api/support/ticket/resolve', async (req, res) => {
 // If artistId is given → pay directly to artist's Stripe Connect account
 // If no artistId → pay to NyuJam platform account
 app.post('/api/donations/create-payment-intent', donationLimiter, async (req, res) => {
+  const user = await getUserFromToken(req)
+  if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const body = pick(req.body, ['amount', 'message', 'artistId'])
   const errV = validate(body, {
     amount:   { required: true, type: 'number', min: 1, max: 999, label: 'Betrag' },
@@ -1645,7 +1702,9 @@ app.get('/api/donations/connect/url', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
 
-  const state = Buffer.from(JSON.stringify({ userId: user.id })).toString('base64')
+  const statePayload = JSON.stringify({ userId: user.id, nonce: crypto.randomBytes(16).toString('hex') })
+  const stateSig = crypto.createHmac('sha256', process.env.SUPABASE_KEY || '').update(statePayload).digest('hex')
+  const state = Buffer.from(statePayload + '.' + stateSig).toString('base64')
   const params = new URLSearchParams({
     response_type: 'code',
     client_id:     process.env.STRIPE_CONNECT_CLIENT_ID,
@@ -1666,7 +1725,13 @@ app.post('/api/donations/connect/callback', async (req, res) => {
   if (errV) return res.status(400).json({ error: errV })
 
   try {
-    const { userId } = JSON.parse(Buffer.from(state, 'base64').toString())
+    const raw = Buffer.from(state, 'base64').toString()
+    const lastDot = raw.lastIndexOf('.')
+    const statePayload = raw.slice(0, lastDot)
+    const receivedSig  = raw.slice(lastDot + 1)
+    const expectedSig  = crypto.createHmac('sha256', process.env.SUPABASE_KEY || '').update(statePayload).digest('hex')
+    if (!crypto.timingSafeEqual(Buffer.from(receivedSig), Buffer.from(expectedSig))) return res.status(401).json({ error: 'Ungültiger State' })
+    const { userId } = JSON.parse(statePayload)
     const user = await getUserFromToken(req)
     if (!user || user.id !== userId) return res.status(401).json({ error: 'Ungültige Session' })
 
@@ -1723,7 +1788,7 @@ app.post('/api/donations/webhook', express.raw({ type: 'application/json' }), (r
     res.json({ received: true })
   } catch (err) {
     console.error('Webhook error:', err.message)
-    res.status(400).send(`Webhook Error: ${err.message}`)
+    res.status(400).send('Webhook Error')
   }
 })
 
@@ -1780,7 +1845,7 @@ app.post('/api/comments/:songId', commentPostLimiter, async (req, res) => {
     timestamp_sec: timestampSec ?? null,
   }).select().single()
 
-  if (error) return res.status(500).json({ error: error.message })
+  if (error) return res.status(500).json({ error: 'Kommentar konnte nicht gespeichert werden.' })
   res.status(201).json({ ...data, likes: 0, isLiked: false })
 })
 
@@ -1964,6 +2029,8 @@ app.get('/api/radio/country/:code', async (req, res) => {
 
 // POST /api/radio/country/:code/next — advance to next song (called by client when song ends)
 app.post('/api/radio/country/:code/next', radioNextLimiter, async (req, res) => {
+  const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const country = req.params.code.toUpperCase()
   const state   = await getCountryState(country)
   // Only advance if the requesting song matches current (prevents race conditions)
@@ -2127,6 +2194,8 @@ app.get('/api/radio/continent/:code', async (req, res) => {
 })
 
 app.post('/api/radio/continent/:code/next', radioNextLimiter, async (req, res) => {
+  const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const continent = req.params.code.toLowerCase()
   const song = await advanceContinentSong(continent)
   res.json({ song })
@@ -2250,6 +2319,8 @@ app.get('/api/radio/global', async (req, res) => {
 })
 
 app.post('/api/radio/global/next', radioNextLimiter, async (req, res) => {
+  const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const song = await advanceGlobalSong()
   res.json({ song })
 })
@@ -2483,6 +2554,7 @@ async function getAllSongs(req) {
 
 app.get('/api/radio/sessions', async (req, res) => {
   const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
   await sb.from('radio_sessions').delete().lt('updated_at', cutoff)
   const { data } = await sb.from('radio_sessions').select('*').eq('is_public', true)
@@ -2506,8 +2578,12 @@ app.post('/api/radio/sessions', async (req, res) => {
 })
 
 app.get('/api/radio/sessions/:id', async (req, res) => {
+  const me = await getUserFromToken(req)
+  if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
   if (!data) return res.status(404).json({ error: 'Session nicht gefunden' })
+  if (!data.is_public && data.host_id !== me.id && !(data.listeners || []).includes(me.id))
+    return res.status(403).json({ error: 'Keine Berechtigung' })
   res.json(data)
 })
 
@@ -2516,6 +2592,11 @@ app.post('/api/radio/sessions/:id/join', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: s } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
   if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (!s.is_public) {
+    const { data: friendship } = await sb.from('friendships').select('id').eq('status', 'accepted')
+      .or(`and(user_a.eq.${me.id},user_b.eq.${s.host_id}),and(user_a.eq.${s.host_id},user_b.eq.${me.id})`).single()
+    if (!friendship) return res.status(403).json({ error: 'Keine Berechtigung' })
+  }
   const listeners = [...new Set([...(s.listeners || []), me.id])]
   const { data } = await sb.from('radio_sessions').update({ listeners, updated_at: new Date().toISOString() }).eq('id', req.params.id).select().single()
   res.json(data)
@@ -2536,6 +2617,7 @@ app.post('/api/radio/sessions/:id/vote', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: s } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
   if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (s.host_id !== me.id && !(s.listeners || []).includes(me.id)) return res.status(403).json({ error: 'Nicht in dieser Session' })
   const votes  = [...new Set([...(s.votes || []), me.id])]
   const needed = Math.ceil((s.listeners || []).length / 2)
   let current_song = s.current_song, queue = s.queue || [], skipped = false
@@ -2553,8 +2635,9 @@ app.post('/api/radio/sessions/:id/vote', async (req, res) => {
 app.post('/api/radio/sessions/:id/chat', chatLimiter, async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
-  const { data: s } = await sb.from('radio_sessions').select('chat_messages').eq('id', req.params.id).single()
+  const { data: s } = await sb.from('radio_sessions').select('host_id, listeners, chat_messages').eq('id', req.params.id).single()
   if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (s.host_id !== me.id && !(s.listeners || []).includes(me.id)) return res.status(403).json({ error: 'Nicht in dieser Session' })
   const { text: chatText } = pick(req.body, ['text'])
   const errChat = validate({ text: chatText }, {
     text: { required: true, type: 'string', minLength: 1, maxLength: 500, label: 'Nachricht' },
@@ -2571,6 +2654,8 @@ app.post('/api/radio/sessions/:id/queue', async (req, res) => {
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: s } = await sb.from('radio_sessions').select('*').eq('id', req.params.id).single()
   if (!s) return res.status(404).json({ error: 'Nicht gefunden' })
+  if (s.host_id !== me.id && !(s.listeners || []).includes(me.id))
+    return res.status(403).json({ error: 'Nicht in dieser Session' })
   const { song } = pick(req.body, ['song'])
   if (!song || typeof song !== 'object' || Array.isArray(song))
     return res.status(400).json({ error: 'Song fehlt oder ungültig' })
@@ -2579,6 +2664,7 @@ app.post('/api/radio/sessions/:id/queue', async (req, res) => {
   if (song.name   && (typeof song.name   !== 'string' || song.name.length   > 200)) return res.status(400).json({ error: 'Ungültiger Songname' })
   if (song.artist && (typeof song.artist !== 'string' || song.artist.length > 100)) return res.status(400).json({ error: 'Ungültiger Künstler' })
   if (song.url    && (typeof song.url    !== 'string' || song.url.length    > 2048)) return res.status(400).json({ error: 'Ungültige URL' })
+  if (song.url && !/^https:\/\//i.test(song.url)) return res.status(400).json({ error: 'Song-URL muss https:// verwenden' })
   const queue = [...(s.queue || []), song]
   let current_song = s.current_song
   let newQueue     = queue
