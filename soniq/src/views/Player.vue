@@ -6,12 +6,7 @@
     <!-- Ad Banner -->
     <AdBanner ad-slot="1918440727" />
 
-    <!-- Dismiss -->
-    <button class="dismiss-btn" @click="goBack" aria-label="Schließen">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
-    </button>
+    <NavBar back-to="/" />
 
     <!-- Error -->
     <div class="error-bar" v-if="player.error">
@@ -164,6 +159,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import SongMenu from '@/components/SongMenu.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'

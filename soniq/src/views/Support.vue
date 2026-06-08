@@ -4,11 +4,7 @@
     <div class="bg-glow"></div>
     <AdBanner ad-slot="1918440727" />
 
-    <button class="dismiss-btn" @click="goBack" aria-label="Zurück">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
-    </button>
+    <NavBar back-to="/" />
 
     <!-- Not logged in -->
     <div class="not-logged-in" v-if="!auth.isLoggedIn">
@@ -131,6 +127,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { useAuthStore } from '@/stores/auth'
 

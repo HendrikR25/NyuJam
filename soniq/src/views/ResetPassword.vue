@@ -2,6 +2,7 @@
   <div class="reset-page">
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
+    <NavBar back-to="/profile" />
     <div class="card">
       <h1 class="card-title">◈ NYUJAM</h1>
 
@@ -37,6 +38,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 

@@ -4,14 +4,10 @@
     <div class="bg-glow" :style="glowStyle"></div>
 
     <AdBanner ad-slot="1918440727" />
+    <NavBar back-to="/" />
 
     <!-- Breadcrumb -->
     <div class="breadcrumb">
-      <button class="bc-btn" @click="goBack">← Zurück</button>
-      <button class="bc-home" @click="router.push('/')" title="Home">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/></svg>
-        Home
-      </button>
       <transition name="bc-fade">
         <span class="bc-trail" v-if="activeContinent || activeCountry">
           <span class="bc-sep">/</span>
@@ -274,6 +270,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'

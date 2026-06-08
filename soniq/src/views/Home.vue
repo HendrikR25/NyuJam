@@ -2,6 +2,7 @@
   <div class="home">
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
+    <NavBar back-to="/" />
 
     <!-- ── Desktop Sidebar ── -->
     <aside class="sidebar">
@@ -217,6 +218,7 @@
 import AdBanner from '@/components/AdBanner.vue'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
 import { ref, computed, onMounted } from 'vue'
+import NavBar from '@/components/NavBar.vue'
 import { useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'

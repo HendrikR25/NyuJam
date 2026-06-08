@@ -11,7 +11,7 @@
       </slot>
     </div>
 
-    <button class="back-btn" @click="router.push('/')">← Zurück</button>
+    <NavBar back-to="/" />
 
     <div class="page-header">
       <h1 class="page-title">PLAYLISTS</h1>
@@ -184,6 +184,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'

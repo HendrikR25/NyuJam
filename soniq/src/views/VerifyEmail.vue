@@ -2,6 +2,7 @@
   <div class="verify-page">
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
+    <NavBar back-to="/profile" />
     <div class="card">
       <div class="card-icon" :class="status">
         <span v-if="status === 'loading'"><span class="spinner"></span></span>
@@ -20,6 +21,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 

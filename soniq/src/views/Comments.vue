@@ -2,12 +2,7 @@
   <div class="comments-page">
     <div class="bg-noise"></div>
 
-    <!-- Dismiss (same as player - arrow down) -->
-    <button class="dismiss-btn" @click="router.replace('/player')" aria-label="Zurück zum Player">
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
-    </button>
+    <NavBar back-to="/player" />
 
     <!-- No song -->
     <div class="no-song" v-if="!player.currentSong">
@@ -127,6 +122,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'

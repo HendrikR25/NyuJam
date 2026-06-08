@@ -5,7 +5,7 @@
 
     <AdBanner ad-slot="1918440727" />
 
-    <button class="back-btn" @click="router.push('/')">← Home</button>
+    <NavBar back-to="/" />
 
     <!-- ── NOT LOGGED IN ── -->
     <template v-if="!auth.isLoggedIn">
@@ -342,6 +342,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'

@@ -11,7 +11,7 @@
       </slot>
     </div>
 
-    <button class="back-btn" @click="router.push('/')">← Zurück</button>
+    <NavBar back-to="/" />
 
     <div class="page-header">
       <h1 class="page-title">FREUNDE</h1>
@@ -46,6 +46,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()

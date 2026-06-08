@@ -3,7 +3,7 @@
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
     <AdBanner ad-slot="1918440727" />
-    <button class="back-btn" @click="router.push('/community')">← Community</button>
+    <NavBar back-to="/community" />
 
     <div class="page-header">
       <h1 class="page-title">GRUPPEN</h1>
@@ -77,6 +77,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'

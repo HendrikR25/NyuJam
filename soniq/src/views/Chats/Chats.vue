@@ -3,6 +3,7 @@
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
     <AdBanner ad-slot="1918440727" />
+    <NavBar back-to="/" />
 
     <!-- Chat window -->
     <transition name="chat-slide">
@@ -127,6 +128,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'

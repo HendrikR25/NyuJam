@@ -4,6 +4,7 @@
     <div class="bg-glow"></div>
 
     <AdBanner ad-slot="1918440727" />
+    <NavBar back-to="/radio" />
 
     <!-- Session view -->
     <div class="session-view" v-if="session">
@@ -157,6 +158,7 @@
 </template>
 
 <script setup>
+import NavBar  from '@/components/NavBar.vue'
 import AdBanner from '@/components/AdBanner.vue'
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'

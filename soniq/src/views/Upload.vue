@@ -2,7 +2,7 @@
   <div class="upload-page">
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
-    <button class="back-btn" @click="router.push('/')">← Home</button>
+    <NavBar back-to="/" />
 
     <div class="page-header">
       <h1 class="page-title">HOCHLADEN</h1>
@@ -217,6 +217,7 @@
 </template>
 
 <script setup>
+import NavBar from '@/components/NavBar.vue'
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore }   from '@/stores/auth'
