@@ -95,13 +95,10 @@ export const usePlayerStore = defineStore('player', () => {
       if (_streamLogged) return
       _streamLogged = true
       const listenedSecs = Math.round(_audio?.duration || 0)
-      const token = localStorage.getItem('nyujam_token') || ''
       fetch(`${BASE_URL}/api/streams`, {
-        method:  'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
+        method:      'POST',
+        credentials: 'include',
+        headers:     { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           songId:       song.id,
           songName:     song.name,
@@ -194,14 +191,9 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   // ── Favorites ──────────────────────────────────────────
-  function authHeader() {
-    const token = localStorage.getItem('nyujam_token') || ''
-    return token ? { 'Authorization': `Bearer ${token}` } : {}
-  }
-
   async function loadFavorites() {
     try {
-      const res = await fetch(`${BASE_URL}/api/favorites`, { headers: authHeader() })
+      const res = await fetch(`${BASE_URL}/api/favorites`, { credentials: 'include' })
       if (!res.ok) return
       likedSongs.value = await res.json()
       if (currentSong.value) {
@@ -217,7 +209,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (isLiked.value) {
       try {
         await fetch(`${BASE_URL}/api/favorites/${song.id}`, {
-          method: 'DELETE', headers: authHeader()
+          method: 'DELETE', credentials: 'include',
         })
       } catch { /* offline */ }
       const idx = likedSongs.value.findIndex(f => String(f.id) === String(song.id))
@@ -226,9 +218,10 @@ export const usePlayerStore = defineStore('player', () => {
     } else {
       try {
         await fetch(`${BASE_URL}/api/favorites`, {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', ...authHeader() },
-          body:    JSON.stringify({ id: String(song.id), name: song.name, artist: song.artist }),
+          method:      'POST',
+          credentials: 'include',
+          headers:     { 'Content-Type': 'application/json' },
+          body:        JSON.stringify({ id: String(song.id), name: song.name, artist: song.artist }),
         })
       } catch { /* offline */ }
       if (!likedSongs.value.some(f => String(f.id) === String(song.id))) {
@@ -239,14 +232,11 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   async function deleteSong(songId) {
-    const token = localStorage.getItem('nyujam_token') || ''
-    const res   = await fetch(`${BASE_URL}/api/songs/${songId}`, {
-      method:  'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
+    const res  = await fetch(`${BASE_URL}/api/songs/${songId}`, {
+      method: 'DELETE', credentials: 'include',
     })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
-    // Remove from local list
     songs.value = songs.value.filter(s => String(s.id) !== String(songId))
     return data
   }

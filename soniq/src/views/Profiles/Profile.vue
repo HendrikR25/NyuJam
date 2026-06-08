@@ -581,8 +581,8 @@ async function changePassword() {
   changingPw.value = true
   try {
     const res  = await fetch(`${BASE_URL}/api/auth/change-password`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword: currentPw.value, newPassword: newPw.value }),
     })
     const data = await res.json()
@@ -606,8 +606,8 @@ async function deleteAccount() {
   deletingAccount.value = true; deleteError.value = ''
   try {
     const res = await fetch(`${BASE_URL}/api/auth/account`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
+      method: 'DELETE', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password: deletePassword.value }),
     })
     const data = await res.json()
@@ -627,7 +627,7 @@ const connectError     = ref('')
 async function loadConnectStatus() {
   if (!auth.isLoggedIn) return
   try {
-    const res = await fetch(`${BASE_URL}/api/donations/connect/status`, { headers: authHeader() })
+    const res = await fetch(`${BASE_URL}/api/donations/connect/status`, { credentials: 'include' })
     if (res.ok) {
       const data = await res.json()
       connectEnabled.value   = data.connected
@@ -639,7 +639,7 @@ async function loadConnectStatus() {
 async function startConnect() {
   connectLoading.value = true; connectError.value = ''
   try {
-    const res  = await fetch(`${BASE_URL}/api/donations/connect/url`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/donations/connect/url`, { credentials: 'include' })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
     window.location.href = data.url
@@ -654,7 +654,7 @@ async function disconnectConnect() {
   connectLoading.value = true; connectError.value = ''
   try {
     const res = await fetch(`${BASE_URL}/api/donations/connect/disconnect`, {
-      method: 'DELETE', headers: authHeader()
+      method: 'DELETE', credentials: 'include',
     })
     if (res.ok) {
       connectEnabled.value   = false
@@ -674,10 +674,6 @@ const coverEditRef  = ref(null)
 const coverEditTarget = ref(null)  // { type, id }
 const uploadFeedback = ref('')
 
-function authHeader() {
-  const token = localStorage.getItem('nyujam_token') || ''
-  return { Authorization: `Bearer ${token}` }
-}
 
 watch(() => auth.isLoggedIn, async (loggedIn) => {
   if (loggedIn) {
@@ -694,8 +690,8 @@ onMounted(async () => {
     connectLoading.value = true
     try {
       const res = await fetch(`${BASE_URL}/api/donations/connect/callback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...authHeader() },
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code, state }),
       })
       const data = await res.json()
@@ -721,7 +717,7 @@ onMounted(async () => {
 async function loadMyUploads() {
   if (!auth.isLoggedIn) return
   try {
-    const res = await fetch(`${BASE_URL}/api/my-uploads`, { headers: authHeader() })
+    const res = await fetch(`${BASE_URL}/api/my-uploads`, { credentials: 'include' })
     myUploads.value = await res.json()
   } catch {}
 }
@@ -737,7 +733,7 @@ async function saveTitle(type, id) {
     const formData = new FormData()
     formData.append('title', editingTitle.value.trim())
     const res = await fetch(`${BASE_URL}/api/${type === 'song' ? 'songs' : 'albums'}/${id}`, {
-      method: 'PATCH', headers: authHeader(), body: formData,
+      method: 'PATCH', credentials: 'include', body: formData,
     })
     if (res.ok) {
       const updated = await res.json()
@@ -768,7 +764,7 @@ async function onCoverEditChange(e) {
   formData.append('cover', file)
   try {
     const res = await fetch(`${BASE_URL}/api/${type === 'song' ? 'songs' : 'albums'}/${id}`, {
-      method: 'PATCH', headers: authHeader(), body: formData,
+      method: 'PATCH', credentials: 'include', body: formData,
     })
     if (res.ok) {
       const updated = await res.json()
@@ -789,7 +785,7 @@ async function deleteUpload(type, id, title) {
   if (!confirm(`„${title}" wirklich löschen?`)) return
   try {
     const endpoint = type === 'song' ? `songs/u_${id}` : `albums/${id}`
-    const res = await fetch(`${BASE_URL}/api/${endpoint}`, { method: 'DELETE', headers: authHeader() })
+    const res = await fetch(`${BASE_URL}/api/${endpoint}`, { method: 'DELETE', credentials: 'include' })
     if (res.ok) {
       if (type === 'song') myUploads.value.songs = myUploads.value.songs.filter(s => s.id !== id)
       else myUploads.value.albums = myUploads.value.albums.filter(a => a.id !== id)

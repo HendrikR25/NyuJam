@@ -186,10 +186,7 @@ const memberNames     = ref({})  // { userId: username }
 let   pollTimer       = null
 let   radioAudio      = null  // dedicated Audio element for radio
 
-function authHeader() {
-  const token = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 // ── Computed ───────────────────────────────────────────
 const isHost      = computed(() => session.value?.host_id === auth.user?.id)
@@ -212,7 +209,7 @@ async function loadSessions() {
   if (!auth.isLoggedIn) return
   loadingSessions.value = true
   try {
-    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/radio/sessions`, { credentials: 'include', headers: JSON_HEADERS })
     sessions.value = await res.json()
   } catch {} finally { loadingSessions.value = false }
 }
@@ -222,7 +219,7 @@ async function loadMemberNames(listenerIds) {
   for (const uid of listenerIds) {
     if (memberNames.value[uid]) continue
     try {
-      const res  = await fetch(`${BASE_URL}/api/users/${uid}`, { headers: authHeader() })
+      const res  = await fetch(`${BASE_URL}/api/users/${uid}`, { credentials: 'include', headers: JSON_HEADERS })
       if (res.ok) {
         const u = await res.json()
         memberNames.value = { ...memberNames.value, [uid]: u.username || uid }
@@ -237,7 +234,7 @@ async function createSession() {
   creating.value = true
   try {
     const res = await fetch(`${BASE_URL}/api/radio/sessions`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ isPublic: true }),
     })
     const s = await res.json()
@@ -250,7 +247,7 @@ async function createSession() {
 async function joinSession(id) {
   try {
     const res = await fetch(`${BASE_URL}/api/radio/sessions/${id}/join`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
     })
     const s = await res.json()
     if (s.error) { alert(s.error); return }
@@ -273,7 +270,7 @@ function enterSession(s) {
 async function pollSession() {
   if (!session.value) return
   try {
-    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}`, { headers: authHeader() })
+    const res = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}`, { credentials: 'include', headers: JSON_HEADERS })
     if (!res.ok) { stopRadioAudio(); session.value = null; clearInterval(pollTimer); return }
     const updated = await res.json()
     const songChanged = updated.current_song?.id !== session.value.current_song?.id
@@ -297,7 +294,7 @@ async function leaveSession() {
   clearInterval(pollTimer)
   stopRadioAudio()
   await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/leave`, {
-    method: 'POST', headers: authHeader(),
+    method: 'POST', credentials: 'include', headers: JSON_HEADERS,
   }).catch(() => {})
   session.value = null
   chatMessages.value = []
@@ -353,7 +350,7 @@ async function addToQueue(song) {
   queueInput.value   = ''
   queueResults.value = []
   await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/queue`, {
-    method: 'POST', headers: authHeader(),
+    method: 'POST', credentials: 'include', headers: JSON_HEADERS,
     body: JSON.stringify({ song: { id: song.id, name: song.name, artist: song.artist, cover: song.cover || null, url: song.url } }),
   }).catch(() => {})
   addSystemMsg(`🎵 ${song.artist} — ${song.name} zur Warteschlange hinzugefügt`)
@@ -365,7 +362,7 @@ async function voteSkip() {
   if (hasVoted.value || !session.value) return
   hasVoted.value = true
   try {
-    const res     = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/vote`, { method: 'POST', headers: authHeader() })
+    const res     = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/vote`, { method: 'POST', credentials: 'include', headers: JSON_HEADERS })
     const updated = await res.json()
     session.value = updated
     if (updated.skipped) addSystemMsg('⏭ Song übersprungen')
@@ -375,7 +372,7 @@ async function voteSkip() {
 async function hostNext() {
   if (!session.value) return
   try {
-    const res     = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/next`, { method: 'POST', headers: authHeader() })
+    const res     = await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/next`, { method: 'POST', credentials: 'include', headers: JSON_HEADERS })
     const updated = await res.json()
     session.value  = updated
     hasVoted.value = false
@@ -398,7 +395,7 @@ async function sendChat() {
   chatInput.value = ''
   try {
     await fetch(`${BASE_URL}/api/radio/sessions/${session.value.id}/chat`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ text }),
     })
     await pollSession()

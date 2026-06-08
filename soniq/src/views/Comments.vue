@@ -138,10 +138,7 @@ const auth   = useAuthStore()
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 
-function authHeader() {
-  const t = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 // ── State ──────────────────────────────────────────────
 const comments     = ref([])
@@ -167,7 +164,7 @@ onMounted(async () => {
 async function loadComments() {
   loading.value = true
   try {
-    const res  = await fetch(`${BASE_URL}/api/comments/${player.currentSong.id}`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/comments/${player.currentSong.id}`, { credentials: 'include' })
     comments.value = await res.json()
   } catch {} finally { loading.value = false }
 }
@@ -179,7 +176,7 @@ async function submitComment() {
     const tsRaw = newTimestamp.value.trim()
     const tsSec = tsRaw ? parseTimestamp(tsRaw) : null
     const res   = await fetch(`${BASE_URL}/api/comments/${player.currentSong.id}`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ text: newComment.value.trim(), timestampSec: tsSec }),
     })
     const data = await res.json()
@@ -197,13 +194,13 @@ async function toggleLike(c) {
   c.isLiked = !wasLiked
   c.likes   = wasLiked ? c.likes - 1 : c.likes + 1
   await fetch(`${BASE_URL}/api/comments/${c.id}/like`, {
-    method: wasLiked ? 'DELETE' : 'POST', headers: authHeader(),
+    method: wasLiked ? 'DELETE' : 'POST', credentials: 'include',
   }).catch(() => { c.isLiked = wasLiked; c.likes = wasLiked ? c.likes + 1 : c.likes - 1 })
 }
 
 async function deleteComment(id) {
   if (!confirm('Kommentar löschen?')) return
-  const res = await fetch(`${BASE_URL}/api/comments/${id}`, { method: 'DELETE', headers: authHeader() })
+  const res = await fetch(`${BASE_URL}/api/comments/${id}`, { method: 'DELETE', credentials: 'include' })
   if (res.ok) comments.value = comments.value.filter(c => c.id !== id)
 }
 

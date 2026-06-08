@@ -139,10 +139,7 @@ const auth   = useAuthStore()
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
 const isSupport = computed(() => auth.user?.username === 'Support' || auth.user?.is_admin)
 
-function authHeader() {
-  const t = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 const ticket      = ref(null)
 const messages    = ref([])
@@ -174,7 +171,7 @@ function goBack() {
 
 async function loadTickets() {
   try {
-    const res  = await fetch(`${BASE_URL}/api/support/tickets`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/support/tickets`, { credentials: 'include' })
     const data = await res.json()
     openTickets.value = (data || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
   } catch {}
@@ -185,7 +182,7 @@ async function openTicketChat(t) {
   activeMessages.value = []
   clearInterval(pollInterval)
   const load = async () => {
-    const res = await fetch(`${BASE_URL}/api/support/ticket/${t.id}/messages`, { headers: authHeader() }).catch(() => null)
+    const res = await fetch(`${BASE_URL}/api/support/ticket/${t.id}/messages`, { credentials: 'include' }).catch(() => null)
     if (res?.ok) { activeMessages.value = await res.json(); nextTick(() => scrollToBottom()) }
   }
   await load()
@@ -197,7 +194,7 @@ async function sendAdminReply() {
   sending.value = true
   try {
     const res = await fetch(`${BASE_URL}/api/support/ticket/${activeTicket.value.id}/reply`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ text: newMessage.value.trim() }),
     })
     const msg = await res.json()
@@ -207,14 +204,14 @@ async function sendAdminReply() {
 
 async function resolveTicketAdmin() {
   if (!confirm('Ticket als gelöst markieren?')) return
-  await fetch(`${BASE_URL}/api/support/ticket/${activeTicket.value.id}/resolve`, { method: 'PATCH', headers: authHeader() })
+  await fetch(`${BASE_URL}/api/support/ticket/${activeTicket.value.id}/resolve`, { method: 'PATCH', credentials: 'include' })
   activeTicket.value = null
   await loadTickets()
 }
 
 async function loadUserTicket() {
   try {
-    const res  = await fetch(`${BASE_URL}/api/support/ticket`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/support/ticket`, { credentials: 'include' })
     const data = await res.json()
     if (data) { ticket.value = data; messages.value = data.messages || []; nextTick(() => scrollToBottom()) }
   } catch {} finally { loading.value = false }
@@ -225,7 +222,7 @@ async function sendMessage() {
   sending.value = true
   try {
     const res = await fetch(`${BASE_URL}/api/support/ticket`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ text: newMessage.value.trim() }),
     })
     const msg = await res.json()
@@ -235,7 +232,7 @@ async function sendMessage() {
 
 async function resolveTicket() {
   if (!confirm('Ticket als gelöst markieren?')) return
-  await fetch(`${BASE_URL}/api/support/ticket/resolve`, { method: 'PATCH', headers: authHeader() })
+  await fetch(`${BASE_URL}/api/support/ticket/resolve`, { method: 'PATCH', credentials: 'include' })
   if (ticket.value) ticket.value.status = 'resolved'
 }
 

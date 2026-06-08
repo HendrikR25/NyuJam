@@ -327,7 +327,7 @@ const stats = ref({
 async function loadStats() {
   if (!auth.isLoggedIn) return
   try {
-    const res  = await fetch(`${BASE_URL}/api/stats/me`, { headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` } })
+    const res  = await fetch(`${BASE_URL}/api/stats/me`, { credentials: 'include' })
     if (!res.ok) return
     const data = await res.json()
     stats.value = {

@@ -1,15 +1,17 @@
 require('dotenv').config()
-const express = require('express')
-const cors    = require('cors')
-const path    = require('path')
-const fs      = require('fs')
-const crypto  = require('crypto')
-const multer  = require('multer')
-const bcrypt  = require('bcryptjs')
-const rateLimit = require('express-rate-limit')
-const stripe  = require('stripe')(process.env.STRIPE_SECRET_KEY)
-const { Resend } = require('resend')
-const cron    = require('node-cron')
+const express      = require('express')
+const helmet       = require('helmet')
+const cors         = require('cors')
+const cookieParser = require('cookie-parser')
+const path         = require('path')
+const fs           = require('fs')
+const crypto       = require('crypto')
+const multer       = require('multer')
+const bcrypt       = require('bcryptjs')
+const rateLimit    = require('express-rate-limit')
+const stripe       = require('stripe')(process.env.STRIPE_SECRET_KEY)
+const { Resend }   = require('resend')
+const cron         = require('node-cron')
 const { createClient } = require('@supabase/supabase-js')
 
 const resend = new Resend(process.env.RESEND_API_KEY)
@@ -25,6 +27,10 @@ async function sendEmail({ to, subject, html }) {
 
 const app = express()
 app.set('trust proxy', 1)  // Railway läuft hinter einem Proxy
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' }, // allow R2 assets
+  contentSecurityPolicy: false, // CSP managed by Vercel for the SPA
+}))
 app.use(cors({
   origin: [
     'http://localhost:5173',
@@ -36,6 +42,7 @@ app.use(cors({
   ].filter(Boolean),
   credentials: true,
 }))
+app.use(cookieParser())
 app.use(express.json({ limit: '1mb' }))
 
 // ── Rate Limiting ──────────────────────────────────────
@@ -43,7 +50,8 @@ app.use(express.json({ limit: '1mb' }))
 // Key generator: uses auth token for logged-in users, IP for guests.
 // This ensures user-based limits survive IP changes (e.g. VPN/proxy).
 function tokenKey(req) {
-  const tok = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  const tok = req.cookies?.nyujam_session
+    || (req.headers.authorization || '').replace('Bearer ', '').trim()
   return tok ? `tok:${tok}` : `ip:${req.ip}`
 }
 
@@ -209,8 +217,9 @@ function pick(body, allowed) {
 }
 
 // ── Supabase ───────────────────────────────────────────
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://jodlwspmkwhparwinttz.supabase.co'
-const SUPABASE_KEY = process.env.SUPABASE_KEY || 'YOUR_SERVICE_ROLE_KEY'
+const SUPABASE_URL = process.env.SUPABASE_URL
+const SUPABASE_KEY = process.env.SUPABASE_KEY
+if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('SUPABASE_URL and SUPABASE_KEY env vars are required')
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 // ── R2 Config ──────────────────────────────────────────
@@ -273,8 +282,21 @@ async function deleteFromR2(key) {
 // ── Auth helpers ───────────────────────────────────────
 function simpleToken() { return crypto.randomBytes(32).toString('hex') }
 
+function sessionCookieOptions() {
+  const prod = process.env.NODE_ENV === 'production'
+  return {
+    httpOnly: true,
+    secure:   prod,
+    sameSite: prod ? 'none' : 'lax',
+    maxAge:   30 * 24 * 60 * 60 * 1000,
+    path:     '/',
+  }
+}
+
 async function getUserFromToken(req) {
-  const tok = (req.headers.authorization || '').replace('Bearer ', '')
+  // Prefer HttpOnly session cookie; fall back to Authorization header for backward compat
+  const tok = req.cookies?.nyujam_session
+    || (req.headers.authorization || '').replace('Bearer ', '').trim()
   if (!tok) return null
   const { data } = await sb.from('users').select('*').eq('token', tok).single()
   return data || null
@@ -284,6 +306,31 @@ function safeUser(u) {
   if (!u) return null
   const { password, token, reset_token, reset_token_expires, verify_token, ...rest } = u
   return rest
+}
+
+// ── File magic-byte validation ─────────────────────────────────────────────
+// Validates the actual bytes of uploaded files, not the client-supplied MIME header.
+function isValidAudio(buf) {
+  if (!buf || buf.length < 4) return false
+  // ID3 tag (MP3)
+  if (buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) return true
+  // MPEG sync word (FF Fx or FF Ex)
+  if (buf[0] === 0xFF && (buf[1] & 0xE0) === 0xE0) return true
+  return false
+}
+
+function isValidImage(buf) {
+  if (!buf || buf.length < 12) return false
+  // JPEG: FF D8 FF
+  if (buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF) return true
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true
+  // GIF: 47 49 46 38
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return true
+  // WebP: RIFF????WEBP
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+      buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50) return true
+  return false
 }
 
 // ── Songs (local MP3s) ─────────────────────────────────
@@ -430,9 +477,8 @@ app.post('/api/upload', upload.fields([{ name: 'mp3', maxCount: 1 }, { name: 'co
     continent: { type: 'string', enum: ['europe','namerica','samerica','asia','africa','oceania'], label: 'Kontinent' },
   })
   if (errV) return res.status(400).json({ error: errV })
-  if (mp3File && !mp3File.mimetype.startsWith('audio/')) return res.status(400).json({ error: 'Ungültiges MP3-Format' })
-  const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-  if (coverFile && !ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
+  if (mp3File && !isValidAudio(mp3File.buffer)) return res.status(400).json({ error: 'Ungültiges MP3-Format' })
+  if (coverFile && !isValidImage(coverFile.buffer)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
   const title     = req.body.title?.trim()
   const artist    = req.body.artist?.trim() || user.username
   const country   = req.body.country?.trim()
@@ -483,8 +529,7 @@ app.patch('/api/songs/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), asy
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
     const coverFile = req.files.cover[0]
-    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
+    if (!isValidImage(coverFile.buffer)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
     const coverKey  = `covers/${rawId}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
     updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     if (song.cover_url) deleteFromR2(decodeURIComponent(song.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
@@ -507,8 +552,7 @@ app.patch('/api/albums/:id', upload.fields([{ name: 'cover', maxCount: 1 }]), as
   if (req.body.title?.trim()) updates.title = req.body.title.trim()
   if (req.files?.cover?.[0]) {
     const coverFile = req.files.cover[0]
-    const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-    if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
+    if (!isValidImage(coverFile.buffer)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
     const coverKey  = `covers/album-${req.params.id}-${Date.now()}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
     updates.cover_url = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     if (album.cover_url) deleteFromR2(decodeURIComponent(album.cover_url.replace(`${R2_PUBLIC_URL}/`, ''))).catch(() => {})
@@ -698,6 +742,7 @@ app.post('/api/auth/register', emailLimiter, async (req, res) => {
     `,
   })
 
+  res.cookie('nyujam_session', token, sessionCookieOptions())
   res.status(201).json({ user: safeUser(data), token, needsVerification: true })
 })
 
@@ -755,6 +800,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, 10)
   const newToken = simpleToken()
   await sb.from('users').update({ password: hashedPassword, reset_token: null, reset_token_expires: null, token: newToken }).eq('id', user.id)
+  res.cookie('nyujam_session', newToken, sessionCookieOptions())
   res.json({ ok: true, message: 'Passwort erfolgreich geändert.' })
 })
 
@@ -773,6 +819,7 @@ app.post('/api/auth/change-password', async (req, res) => {
   const hashedPassword = await bcrypt.hash(newPassword, 10)
   const newToken = simpleToken()
   await sb.from('users').update({ password: hashedPassword, token: newToken }).eq('id', user.id)
+  res.cookie('nyujam_session', newToken, sessionCookieOptions())
   res.json({ ok: true, token: newToken })
 })
 
@@ -876,7 +923,16 @@ app.post('/api/auth/login', async (req, res) => {
   const token = simpleToken(user.id)
   await sb.from('users').update({ token }).eq('id', user.id)
   user.token = token
+  res.cookie('nyujam_session', token, sessionCookieOptions())
   res.json({ user: safeUser(user), token })
+})
+
+app.post('/api/auth/logout', async (req, res) => {
+  const tok = req.cookies?.nyujam_session
+    || (req.headers.authorization || '').replace('Bearer ', '').trim()
+  if (tok) await sb.from('users').update({ token: simpleToken() }).eq('token', tok)
+  res.clearCookie('nyujam_session', sessionCookieOptions())
+  res.json({ ok: true })
 })
 
 app.patch('/api/auth/profile', async (req, res) => {
@@ -1075,24 +1131,43 @@ app.get('/api/conversations', async (req, res) => {
   const me = await getUserFromToken(req)
   if (!me) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const { data: fships } = await sb.from('friendships').select('*').or(`user_a.eq.${me.id},user_b.eq.${me.id}`).eq('status', 'accepted')
-  const { data: allUsers } = await sb.from('users').select('id,username,avatar')
-  const { data: allMsgs }  = await sb.from('messages').select('*').order('created_at', { ascending: false })
   const { data: memberships } = await sb.from('group_members').select('group_id').eq('user_id', me.id)
   const groupIds = (memberships || []).map(m => m.group_id)
+
+  const friendIds = (fships || []).map(f => f.user_a === me.id ? f.user_b : f.user_a)
+
+  // Fetch only users who are friends, not the entire users table
+  const { data: friendUsers } = friendIds.length
+    ? await sb.from('users').select('id,username,avatar').in('id', friendIds)
+    : { data: [] }
+
+  // Fetch only DMs involving the current user — not the entire messages table
+  const { data: dmMsgs } = await sb.from('messages').select('*')
+    .or(`from_id.eq.${me.id},to_id.eq.${me.id}`)
+    .is('group_id', null)
+    .order('created_at', { ascending: false })
+
+  // Fetch group messages for groups the user is a member of
+  const { data: groupMsgs } = groupIds.length
+    ? await sb.from('messages').select('*').in('group_id', groupIds).order('created_at', { ascending: false })
+    : { data: [] }
+
+  const allMsgs = [...(dmMsgs || []), ...(groupMsgs || [])]
+
   const { data: groups } = groupIds.length ? await sb.from('groups').select('*, group_members(count)').in('id', groupIds) : { data: [] }
 
   const dms = (fships || []).map(f => {
     const fId   = f.user_a === me.id ? f.user_b : f.user_a
-    const friend = allUsers?.find(u => u.id === fId)
+    const friend = (friendUsers || []).find(u => u.id === fId)
     if (!friend) return null
-    const msgs  = (allMsgs || []).filter(m => (m.from_id === me.id && m.to_id === fId) || (m.from_id === fId && m.to_id === me.id))
+    const msgs  = allMsgs.filter(m => (m.from_id === me.id && m.to_id === fId) || (m.from_id === fId && m.to_id === me.id))
     const last  = msgs[0] || null
     const unread = msgs.filter(m => m.to_id === me.id).length
     return { type: 'dm', id: fId, name: friend.username, avatar: friend.avatar, lastMessage: last, unread }
   }).filter(Boolean)
 
   const grps = (groups || []).map(g => {
-    const msgs = (allMsgs || []).filter(m => m.group_id === g.id)
+    const msgs = allMsgs.filter(m => m.group_id === g.id)
     return { type: 'group', id: g.id, name: g.name, icon: g.icon, color: g.color, members: g.group_members?.[0]?.count || 1, lastMessage: msgs[0] || null, unread: 0 }
   })
 
@@ -1246,8 +1321,7 @@ app.post('/api/albums', upload.fields([
     let coverUrl = null
     if (req.files?.cover?.[0]) {
       const coverFile = req.files.cover[0]
-      const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
-      if (!ALLOWED_IMAGE_TYPES.includes(coverFile.mimetype)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
+      if (!isValidImage(coverFile.buffer)) return res.status(400).json({ error: 'Ungültiges Cover-Format (JPEG, PNG, WebP oder GIF)' })
       const coverKey  = `covers/${albumId}-${coverFile.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
       coverUrl = await uploadToR2(coverFile.buffer, coverKey, coverFile.mimetype)
     }
@@ -1260,7 +1334,7 @@ app.post('/api/albums', upload.fields([
     for (let i = 0; i < tracks.length; i++) {
       const mp3File = req.files?.[`mp3_${i}`]?.[0]
       if (!mp3File) continue
-      if (!['audio/mpeg', 'audio/mp3'].includes(mp3File.mimetype))
+      if (!isValidAudio(mp3File.buffer))
         return res.status(400).json({ error: `Track ${i + 1}: Nur MP3-Dateien erlaubt` })
       const songId  = `${Date.now()}_${i}`
       const mp3Key  = `music/${songId}-${mp3File.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`
@@ -1334,7 +1408,6 @@ app.get('/api/stats/me', async (req, res) => {
   const user = await getUserFromToken(req)
   if (!user) return res.status(401).json({ error: 'Nicht eingeloggt' })
   const uid = user.id
-  console.log('Stats request for uid:', uid, typeof uid)
   const weekStart = new Date()
   weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay())
   weekStart.setUTCHours(0, 0, 0, 0)
@@ -1368,8 +1441,6 @@ app.get('/api/stats/me', async (req, res) => {
     sb.from('streams').select('duration_secs').eq('user_id', uid).gte('played_at', weekStart.toISOString()).not('duration_secs', 'is', null),
     sb.from('streams').select('duration_secs').eq('user_id', uid).not('duration_secs', 'is', null),
   ])
-
-  console.log('Stats results — streamsTotal:', streamsTotal, 'streamsWeek:', streamsWeek, 'weekStart:', weekStart.toISOString())
 
   // Top genre this week
   let topGenre = null
@@ -1494,7 +1565,7 @@ app.post('/api/subscription/create', async (req, res) => {
     res.json({ url: session.url })
   } catch (e) {
     console.error('Stripe subscription error:', e.message)
-    res.status(500).json({ error: e.message })
+    res.status(500).json({ error: 'Zahlungsfehler. Bitte versuche es später erneut.' })
   }
 })
 

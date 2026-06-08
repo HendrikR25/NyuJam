@@ -439,10 +439,7 @@ function goBack() {
 }
 
 // ── Country radio ──────────────────────────────────────
-function authHeader() {
-  const token = auth.token || localStorage.getItem('token')
-  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 async function loadCountryRadio(code) {
   try {
@@ -471,7 +468,7 @@ async function loadCountryRadio(code) {
       countryRadio.value.isLiked = false
       if (auth.isLoggedIn) {
         fetch(`${BASE_URL}/api/radio/country/${code}/listen`, {
-          method: 'POST', headers: authHeader(),
+          method: 'POST', credentials: 'include', headers: JSON_HEADERS,
           body: JSON.stringify({ songId: data.currentSong.id }),
         }).catch(() => {})
       }
@@ -494,7 +491,7 @@ function startSyncedPlay(data) {
   radioAudio.onended = () => {
     if (!activeCountry.value) return
     fetch(`${BASE_URL}/api/radio/country/${activeCountry.value.iso}/next`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ songId: data.currentSong.id }),
     }).then(() => loadCountryRadio(activeCountry.value.iso)).catch(() => {})
   }
@@ -632,7 +629,7 @@ async function toggleLike() {
   const wasLiked = countryRadio.value.isLiked
   countryRadio.value.isLiked = !wasLiked
   await fetch(`${BASE_URL}/api/radio/country/${code}/${wasLiked ? 'unlike' : 'like'}`, {
-    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+    method: 'POST', credentials: 'include', headers: JSON_HEADERS, body: JSON.stringify({ songId }),
   }).catch(() => { countryRadio.value.isLiked = wasLiked })
 }
 
@@ -642,7 +639,7 @@ async function toggleContinentLike() {
   const wasLiked = continentRadio.value.isLiked
   continentRadio.value.isLiked = !wasLiked
   await fetch(`${BASE_URL}/api/radio/continent/${activeContinent.value.id}/${wasLiked ? 'unlike' : 'like'}`, {
-    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+    method: 'POST', credentials: 'include', headers: JSON_HEADERS, body: JSON.stringify({ songId }),
   }).catch(() => { continentRadio.value.isLiked = wasLiked })
 }
 
@@ -652,7 +649,7 @@ async function toggleGlobalLike() {
   const wasLiked = globalRadio.value.isLiked
   globalRadio.value.isLiked = !wasLiked
   await fetch(`${BASE_URL}/api/radio/global/${wasLiked ? 'unlike' : 'like'}`, {
-    method: 'POST', headers: authHeader(), body: JSON.stringify({ songId }),
+    method: 'POST', credentials: 'include', headers: JSON_HEADERS, body: JSON.stringify({ songId }),
   }).catch(() => { globalRadio.value.isLiked = wasLiked })
 }
 

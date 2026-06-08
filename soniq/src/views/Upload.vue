@@ -417,7 +417,7 @@ async function submitSong() {
     const song = await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
       xhr.open('POST', `${BASE_URL}/api/upload`)
-      xhr.setRequestHeader('Authorization', `Bearer ${localStorage.getItem('nyujam_token') || ''}`)
+      xhr.withCredentials = true
       xhr.upload.onprogress = e => { if (e.lengthComputable) uploadProgress.value = Math.round(e.loaded / e.total * 90) }
       xhr.onload = () => {
         uploadProgress.value = 100
@@ -459,7 +459,7 @@ async function submitAlbum() {
       formData.append(`mp3_${i}`, t.file)
     })
 
-    const res  = await fetch(`${BASE_URL}/api/albums`, { method: 'POST', headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }, body: formData })
+    const res  = await fetch(`${BASE_URL}/api/albums`, { method: 'POST', credentials: 'include', body: formData })
     const data = await res.json()
     if (!res.ok) throw new Error(data.error)
 

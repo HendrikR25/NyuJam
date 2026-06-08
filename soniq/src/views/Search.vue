@@ -169,9 +169,7 @@ onMounted(async () => {
 async function loadHistory() {
   if (!auth.isLoggedIn) return
   try {
-    const res = await fetch(`${BASE_URL}/api/search/history`, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
-    })
+    const res = await fetch(`${BASE_URL}/api/search/history`, { credentials: 'include' })
     searchHistory.value = await res.json()
   } catch {}
 }
@@ -180,8 +178,8 @@ async function saveHistory(q) {
   if (!auth.isLoggedIn) return
   try {
     await fetch(`${BASE_URL}/api/search/history`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` },
+      method: 'POST', credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query: q }),
     })
     await loadHistory()
@@ -190,20 +188,14 @@ async function saveHistory(q) {
 
 async function deleteHistory(id) {
   try {
-    await fetch(`${BASE_URL}/api/search/history/${id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
-    })
+    await fetch(`${BASE_URL}/api/search/history/${id}`, { method: 'DELETE', credentials: 'include' })
     searchHistory.value = searchHistory.value.filter(h => h.id !== id)
   } catch {}
 }
 
 async function clearAllHistory() {
   try {
-    await fetch(`${BASE_URL}/api/search/history`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${localStorage.getItem('nyujam_token') || ''}` }
-    })
+    await fetch(`${BASE_URL}/api/search/history`, { method: 'DELETE', credentials: 'include' })
     searchHistory.value = []
   } catch {}
 }

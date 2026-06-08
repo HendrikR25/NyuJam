@@ -180,10 +180,7 @@ const auth   = useAuthStore()
 const playlistsStore = usePlaylistsStore()
 
 const BASE_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001'
-function authHeader() {
-  const t = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 // ── Radio mode ─────────────────────────────────────────
 // When radioState.isRadioMode, we read directly from radioState instead of player store
@@ -206,7 +203,7 @@ let   lastShownCommentId     = null
 async function loadCommentsMeta() {
   if (!player.currentSong) return
   try {
-    const res  = await fetch(`${BASE_URL}/api/comments/${player.currentSong.id}`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/comments/${player.currentSong.id}`, { credentials: 'include' })
     const data = await res.json()
     commentCount.value      = data.length
     timestampComments.value = data.filter(c => c.timestampSec !== null && c.timestampSec !== undefined)

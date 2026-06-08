@@ -121,15 +121,12 @@ const subscribing = ref(null)
 const cancelling  = ref(false)
 const errorMsg    = ref('')
 
-function authHeader() {
-  const t = localStorage.getItem('nyujam_token') || ''
-  return { 'Content-Type': 'application/json', Authorization: `Bearer ${t}` }
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
 
 onMounted(async () => {
   if (!auth.isLoggedIn) return
   try {
-    const res  = await fetch(`${BASE_URL}/api/subscription`, { headers: authHeader() })
+    const res  = await fetch(`${BASE_URL}/api/subscription`, { credentials: 'include' })
     const data = await res.json()
     currentSub.value = (data && data.plan) ? data : null
   } catch {}
@@ -141,7 +138,7 @@ async function subscribe(plan) {
   errorMsg.value = ''
   try {
     const res  = await fetch(`${BASE_URL}/api/subscription/create`, {
-      method: 'POST', headers: authHeader(),
+      method: 'POST', credentials: 'include', headers: JSON_HEADERS,
       body: JSON.stringify({ plan }),
     })
     const data = await res.json()
@@ -155,7 +152,7 @@ async function cancelSub() {
   if (!confirm('Abo wirklich kündigen?')) return
   cancelling.value = true
   try {
-    await fetch(`${BASE_URL}/api/subscription/cancel`, { method: 'POST', headers: authHeader() })
+    await fetch(`${BASE_URL}/api/subscription/cancel`, { method: 'POST', credentials: 'include' })
     currentSub.value = null
   } catch { errorMsg.value = 'Kündigung fehlgeschlagen' }
   finally { cancelling.value = false }
