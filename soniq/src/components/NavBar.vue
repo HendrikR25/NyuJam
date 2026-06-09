@@ -33,30 +33,31 @@ function onBack() {
   position: relative; z-index: 1;
   align-self: flex-start;
   display: flex; align-items: center; gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  padding: 0.75rem 0 0 0.75rem;
+  margin-bottom: 1.25rem;
 }
 .nav-btn {
   display: flex; align-items: center; gap: 0.35rem;
   background: none; border: none; cursor: pointer;
   font-family: 'DM Sans', sans-serif;
-  font-size: 0.78rem; letter-spacing: 0.1em;
+  font-size: 0.82rem; letter-spacing: 0.08em;
   border-radius: 4px;
   transition: color 0.2s, background 0.2s;
 }
 .nav-btn--back {
-  color: rgba(240,237,230,0.35);
-  padding: 0.35rem 0.5rem 0.35rem 0;
+  color: rgba(240,237,230,0.7);
+  padding: 0.4rem 0.6rem 0.4rem 0.2rem;
 }
 .nav-btn--back:hover { color: #ff5a32; }
 .nav-btn--home {
-  color: rgba(240,237,230,0.25);
-  background: rgba(240,237,230,0.04);
-  border: 1px solid rgba(240,237,230,0.08);
-  padding: 0.3rem 0.65rem;
+  color: rgba(240,237,230,0.6);
+  background: rgba(240,237,230,0.07);
+  border: 1px solid rgba(240,237,230,0.15);
+  padding: 0.35rem 0.75rem;
 }
 .nav-btn--home:hover {
   color: #f0ede6;
-  background: rgba(240,237,230,0.08);
-  border-color: rgba(240,237,230,0.15);
+  background: rgba(240,237,230,0.12);
+  border-color: rgba(240,237,230,0.25);
 }
 </style>

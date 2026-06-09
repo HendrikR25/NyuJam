@@ -2,36 +2,6 @@
   <div class="home">
     <div class="bg-noise"></div>
     <div class="bg-glow"></div>
-    <NavBar back-to="/" />
-
-    <!-- ── Desktop Sidebar ── -->
-    <aside class="sidebar">
-      <div class="sidebar-logo">NYJ</div>
-      <button class="sidebar-icon sidebar-home" :class="{ active: activeId === 'home' }" title="Home" @click="activeId = 'home'">
-        <span class="si-icon">⌂</span>
-      </button>
-
-      <nav class="sidebar-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          class="sidebar-icon"
-          :class="{ active: activeId === item.id }"
-          :title="item.label"
-          @click="navigate(item)"
-        >
-          <span class="si-icon">{{ item.icon }}</span>
-        </button>
-      </nav>
-
-      <button class="sidebar-icon sidebar-profile" :title="auth.user?.username || 'Profil'" @click="router.push('/profile')">
-        <div class="si-avatar" v-if="auth.user">
-          <img v-if="auth.user.avatar" :src="auth.user.avatar" class="si-avatar-img" />
-          <span v-else>{{ auth.user.username.slice(0,2).toUpperCase() }}</span>
-        </div>
-        <span class="si-icon" v-else>◎</span>
-      </button>
-    </aside>
 
     <!-- ── Main Content ── -->
     <main class="main">
@@ -181,28 +151,6 @@
       </div>
     </main>
 
-    <!-- ── Mobile Bottom Bar ── -->
-    <nav class="bottom-bar">
-      <button
-        v-for="item in bottomItems"
-        :key="item.id"
-        class="bb-tab"
-        :class="{ active: activeId === item.id }"
-        @click="navigate(item)"
-      >
-        <span class="bb-icon">{{ item.icon }}</span>
-        <span class="bb-label">{{ item.label }}</span>
-      </button>
-      <button class="bb-tab" :class="{ active: activeId === 'profile' }" @click="router.push('/profile')">
-        <div class="bb-avatar" v-if="auth.user">
-          <img v-if="auth.user.avatar" :src="auth.user.avatar" class="si-avatar-img" />
-          <span v-else>{{ auth.user.username.slice(0,1).toUpperCase() }}</span>
-        </div>
-        <span v-else class="bb-icon">◎</span>
-        <span class="bb-label">Profil</span>
-      </button>
-    </nav>
-
     <PlaylistWheel
       :open="wheelOpen"
       :origin-x="wheelOriginX"
@@ -218,7 +166,6 @@
 import AdBanner from '@/components/AdBanner.vue'
 import PlaylistWheel from '@/components/PlaylistWheel.vue'
 import { ref, computed, onMounted } from 'vue'
-import NavBar from '@/components/NavBar.vue'
 import { useRouter } from 'vue-router'
 import { usePlayerStore } from '@/stores/player'
 import { usePlaylistsStore } from '@/stores/playlists'
@@ -415,70 +362,6 @@ function onWheelCancel() { wheelOpen.value = false }
     radial-gradient(ellipse 50% 60% at 85% 70%, rgba(80,60,255,0.06) 0%, transparent 70%);
 }
 
-/* ── Sidebar ── */
-.sidebar {
-  position: relative; z-index: 10;
-  width: 56px;
-  background: rgba(240,237,230,0.02);
-  border-right: 1px solid rgba(240,237,230,0.06);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 10px 0;
-  flex-shrink: 0;
-  gap: 2px;
-}
-.sidebar-logo {
-  font-family: 'Bebas Neue', cursive;
-  font-size: 0.75rem;
-  letter-spacing: 0.18em;
-  color: #ff5a32;
-  writing-mode: vertical-rl;
-  margin-bottom: 4px;
-  user-select: none;
-}
-.sidebar-home { margin-bottom: 6px; font-size: 1.1rem !important; }
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  flex: 1;
-}
-.sidebar-icon {
-  width: 38px; height: 38px;
-  border-radius: 8px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  display: flex; align-items: center; justify-content: center;
-  color: rgba(240,237,230,0.3);
-  font-size: 1rem;
-  transition: all 0.15s;
-  position: relative;
-}
-.sidebar-icon:hover { background: rgba(255,90,50,0.08); color: rgba(240,237,230,0.7); }
-.sidebar-icon.active { background: rgba(255,90,50,0.12); color: #ff5a32; }
-.sidebar-icon.active::before {
-  content: '';
-  position: absolute;
-  left: 0; top: 50%;
-  transform: translateY(-50%);
-  width: 2px; height: 60%;
-  background: #ff5a32;
-  border-radius: 0 1px 1px 0;
-}
-.sidebar-profile { margin-top: auto; }
-.si-avatar {
-  width: 28px; height: 28px; border-radius: 50%;
-  background: rgba(255,90,50,0.15);
-  border: 1px solid rgba(255,90,50,0.3);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.6rem; font-weight: 700; color: #ff5a32;
-  overflow: hidden;
-}
-.si-avatar-img { width: 100%; height: 100%; object-fit: cover; }
-
 /* ── Main ── */
 .main {
   position: relative; z-index: 1;
@@ -515,6 +398,15 @@ function onWheelCancel() { wheelOpen.value = false }
   color: rgba(240,237,230,0.4);
   font-size: 1rem;
 }
+.si-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: rgba(255,90,50,0.15);
+  border: 1px solid rgba(255,90,50,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.6rem; font-weight: 700; color: #ff5a32;
+  overflow: hidden;
+}
+.si-avatar-img { width: 100%; height: 100%; object-fit: cover; }
 
 /* ── Hero Radio Card ── */
 .hero-card {
@@ -639,45 +531,13 @@ function onWheelCancel() { wheelOpen.value = false }
   pointer-events: none;
 }
 
-/* ── Bottom Bar ── */
-.bottom-bar {
-  display: none;
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(10,10,15,0.97);
-  border-top: 1px solid rgba(240,237,230,0.07);
-  padding: 8px 0 max(10px, env(safe-area-inset-bottom));
-  justify-content: space-around;
-  align-items: center;
-}
-.bb-tab {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: none; border: none; cursor: pointer;
-  color: rgba(240,237,230,0.3); font-size: 0.6rem;
-  letter-spacing: 0.05em; min-width: 48px;
-  transition: color 0.15s;
-}
-.bb-tab.active { color: #ff5a32; }
-.bb-icon { font-size: 1.2rem; line-height: 1; }
-.bb-label { font-size: 0.6rem; }
-.bb-avatar {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: rgba(255,90,50,0.15);
-  border: 1px solid rgba(255,90,50,0.3);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 0.55rem; font-weight: 700; color: #ff5a32;
-  overflow: hidden;
-}
-
 /* ── Keyframes ── */
 @keyframes slideUp { to { opacity: 1; transform: translateY(0); } }
 @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.4;transform:scale(0.7)} }
 
 /* ── Mobile ── */
 @media (max-width: 600px) {
-  .sidebar { display: none; }
   .mobile-header { display: flex; }
-  .bottom-bar { display: flex; }
-  .main { padding-bottom: calc(60px + env(safe-area-inset-bottom)); }
   .nav-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>

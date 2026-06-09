@@ -127,4 +127,14 @@ function openPlayer() {
   0%, 100% { opacity: 1; transform: scale(1); }
   50%       { opacity: 0.4; transform: scale(0.7); }
 }
+
+/* Lift bar above mobile bottom nav */
+@media (max-width: 600px) {
+  .now-playing-bar {
+    bottom: calc(60px + env(safe-area-inset-bottom) + 0.6rem);
+  }
+  .bar-slide-enter-from, .bar-slide-leave-to {
+    transform: translateX(-50%) translateY(20px);
+  }
+}
 </style>
